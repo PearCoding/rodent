@@ -19,6 +19,7 @@ set(SHADING_SRCS
     ../../src/core/color.impala
     ../../src/core/random.impala
     ../../src/core/matrix.impala
+    ../../src/core/spectral.impala
     ../../src/core/vector.impala)
 
 anydsl_runtime_wrap(SHADING_OBJS

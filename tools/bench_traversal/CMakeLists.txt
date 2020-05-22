@@ -8,6 +8,7 @@ set(TRAVERSAL_SRCS
     ../../src/core/cpu_common.impala
     ../../src/core/sort.impala
     ../../src/core/matrix.impala
+    ../../src/core/spectral.impala
     ../../src/core/vector.impala)
 
 anydsl_runtime_wrap(TRAVERSAL_OBJS

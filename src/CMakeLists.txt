@@ -27,6 +27,7 @@ set(RODENT_SRCS
     core/matrix.impala
     core/random.impala
     core/sort.impala
+    core/spectral.impala
     core/vector.impala
     render/image.impala
     render/camera.impala
@@ -99,11 +100,18 @@ if (EMBREE_FOUND)
     target_compile_definitions(converter PUBLIC ${EMBREE_DEFINITIONS} -DENABLE_EMBREE_BVH)
 endif()
 
+# Add simple (possible) dependency to the material file
+string(REGEX REPLACE "[.]obj$" ".mtl" SCENE_FILE_MTL ${SCENE_FILE})
+set(CONVERTER_DEPENDENCIES ${SCENE_FILE})
+if(EXISTS ${SCENE_FILE_MTL})
+    list(APPEND CONVERTER_DEPENDENCIES ${SCENE_FILE_MTL})
+endif()
+
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/main.impala
     COMMAND converter ${SCENE_FILE} ${CONVERTER_OPTIONS} --max-path-len ${MAX_PATH_LEN} --samples-per-pixel ${SPP}
     COMMAND ${CMAKE_COMMAND} -E rename ${CMAKE_BINARY_DIR}/main.impala ${CMAKE_CURRENT_BINARY_DIR}/main.impala
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    DEPENDS ${SCENE_FILE} converter)
+    DEPENDS ${CONVERTER_DEPENDENCIES} converter)
 
 add_custom_target(convert DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/main.impala)
 
