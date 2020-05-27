@@ -1,0 +1,31 @@
+# Blender MTL File: 'prism.blend'
+# Material Count: 3
+
+newmtl Diffuse
+Ns 320
+Ni 1.0000
+Ka 1 1 1
+Kd 1 1 1
+Ks 0 0 0
+Ke 0 0 0
+Tf 0 0 0
+illum 2
+
+newmtl Light
+illum 2
+Ns 1.0000
+Ni 1.0000
+Ka 0.78 0.78 0.78 # White
+Kd 0.78 0.78 0.78
+Ks 0 0 0
+Ke 17 12 4
+Tf 0 0 0
+
+newmtl Prism
+Ka 0 0 0 
+Kd 0 0 0 
+Ks 1 1 1
+Tf 1 1 1
+Ke 0 0 0
+Ni 1.55
+illum 7
