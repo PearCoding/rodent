@@ -1,7 +1,7 @@
 // Opaque camera object
 struct Camera {
     // Generates a ray for a point on the image plane (in [-1, 1]^2)
-    generate_ray: fn (f32, f32) -> Ray,
+    generate_ray: fn (f32, f32, SpectralWavelength) -> Ray,
     // Projects a 3D point on the image plane
     project: fn (Vec3) -> Vec3,
     // Unprojects a point on the image plane
@@ -32,7 +32,7 @@ fn @make_perspective_camera(math: Intrinsics, eye: Vec3, view: Mat3x3, w: f32, h
     let up    = view.col(1);
 
     Camera {
-        generate_ray: @ |x, y| {
+        generate_ray: @ |x, y, wvl| {
             let d = vec3_normalize(math,
                 vec3_add(
                     vec3_add(vec3_mulf(right, w * x),
@@ -40,7 +40,7 @@ fn @make_perspective_camera(math: Intrinsics, eye: Vec3, view: Mat3x3, w: f32, h
                     dir
                 )
             );
-            make_ray(eye, d, 0.0f, flt_max)
+            make_ray(eye, d, wvl, 0.0f, flt_max)
         },
         project: @ |p| {
             let d = vec3_normalize(math, vec3_sub(p, eye));

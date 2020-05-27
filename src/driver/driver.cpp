@@ -10,10 +10,18 @@
 #include <SDL.h>
 #endif
 
+#define CULL_BAD_COLOR
+//#define CATCH_BAD_COLOR
+
+#ifndef NDEBUG
+#include <fenv.h>
+#endif
+
 #include "interface.h"
 #include "float3.h"
 #include "common.h"
 #include "image.h"
+#include "color.h"
 
 #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
 #include <x86intrin.h>
@@ -115,20 +123,91 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
     return false;
 }
 
+#define RGB_C(r,g,b) (((r) << 16) | ((g) << 8) | (b))
+
+static inline rgb xyz_to_srgb(const rgb& c) {
+    return rgb(  3.2404542f*c.x - 1.5371385f*c.y - 0.4985314f*c.z, 
+                -0.9692660f*c.x + 1.8760108f*c.y + 0.0415560f*c.z,
+                 0.0556434f*c.x - 0.2040259f*c.y + 1.0572252f*c.z);
+}
+
+static inline rgb srgb_to_xyz(const rgb& c) {
+    return rgb( 0.4124564f*c.x + 0.3575761f*c.y + 0.1804375f*c.z,
+                0.2126729f*c.x + 0.7151522f*c.y + 0.0721750f*c.z,
+                0.0193339f*c.x + 0.1191920f*c.y + 0.9503041f*c.z);
+}
+
+static inline rgb xyY_to_srgb(const rgb& c) {
+    return c.y == 0 ? rgb(0,0,0) : xyz_to_srgb(rgb(c.x*c.z/c.y, c.z, (1-c.x-c.y)*c.z/c.y));
+}
+
+static inline rgb srgb_to_xyY(const rgb& c) {
+    const auto s = srgb_to_xyz(c);
+    const auto n = s.x+s.y+s.z;
+    return (n == 0)?rgb(0,0,0):rgb(s.x/n, s.y/n, s.y);
+}
+
+static inline float reinhard_modified(float L) {
+    constexpr float WhitePoint = 4.0f;
+    return (L*(1.0f+L/(WhitePoint*WhitePoint)))/(1.0f+L);
+}
+
 static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, size_t height, uint32_t iter) {
     auto film = get_pixels();
     auto inv_iter = 1.0f / iter;
     auto inv_gamma = 1.0f / 2.2f;
+
+    //float avg_luminance = 0.0f;
+    float max_luminance = 0.00001f;
+    //const float inv_f = 1.0f/(width*height);
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
             auto r = film[(y * width + x) * 3 + 0];
             auto g = film[(y * width + x) * 3 + 1];
             auto b = film[(y * width + x) * 3 + 2];
 
+            const auto L = srgb_to_xyY(rgb(r,g,b)).z;
+            //avg_luminance += L*inv_f;
+            max_luminance = std::max(max_luminance, L);
+        }
+    }
+
+    //avg_luminance = std::max(0.00001f, avg_luminance) * inv_iter;
+
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            auto r = film[(y * width + x) * 3 + 0];
+            auto g = film[(y * width + x) * 3 + 1];
+            auto b = film[(y * width + x) * 3 + 2];
+
+            const auto xyY = srgb_to_xyY(rgb(r,g,b));
+#ifdef CULL_BAD_COLOR
+            if(std::isinf(xyY.z)) {
+#ifdef CATCH_BAD_COLOR
+                buf[y * width + x] = RGB_C(255, 0, 150);//Pink
+#endif
+                continue;
+            } else if(std::isnan(xyY.z)) {
+#ifdef CATCH_BAD_COLOR
+                buf[y * width + x] = RGB_C(0, 255, 255);//Cyan
+#endif
+                continue;
+            } else if(xyY.x < 0.0f || xyY.y < 0.0f || xyY.z < 0.0f) {
+#ifdef CATCH_BAD_COLOR
+                buf[y * width + x] = RGB_C(255, 255, 0);//Orange
+#endif
+                continue;
+            }
+#endif
+
+            //const float L = xyY.z / (9.6f * avg_luminance);
+            const float L = xyY.z / max_luminance;
+            const auto c = xyY_to_srgb(rgb(xyY.x, xyY.y, reinhard_modified(L)));
+
             buf[y * width + x] =
-                (uint32_t(clamp(std::pow(r * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f) << 16) |
-                (uint32_t(clamp(std::pow(g * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f) << 8)  |
-                 uint32_t(clamp(std::pow(b * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f);
+                (uint32_t(clamp(std::pow(c.x, inv_gamma), 0.0f, 1.0f) * 255.0f) << 16) |
+                (uint32_t(clamp(std::pow(c.y, inv_gamma), 0.0f, 1.0f) * 255.0f) << 8)  |
+                 uint32_t(clamp(std::pow(c.z, inv_gamma), 0.0f, 1.0f) * 255.0f);
         }
     }
     SDL_UpdateTexture(texture, nullptr, buf, width * sizeof(uint32_t));
@@ -268,6 +347,10 @@ int main(int argc, char** argv) {
     // Force flush to zero mode for denormals
 #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
     _mm_setcsr(_mm_getcsr() | (_MM_FLUSH_ZERO_ON | _MM_DENORMALS_ZERO_ON));
+#endif
+
+#if !defined(NDEBUG)
+feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
 #endif
 
     auto spp = get_spp();

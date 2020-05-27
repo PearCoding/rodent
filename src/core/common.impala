@@ -84,6 +84,10 @@ fn @safe_rcp(x: f32) -> f32 {
     if select(x > 0.0f, x, -x) < min_rcp { prodsign(flt_max, x) } else { 1.0f / x }
 }
 
+fn @safe_div(a: f32, b: f32) -> f32 {
+    a * safe_rcp(b)
+}
+
 fn @round_up(n: i32, d: i32) -> i32 {
     let m = n % d;
     n + (if m != 0 { d - m } else { 0 })
@@ -151,4 +155,12 @@ fn @swap_u32(a: &mut u32, b: &mut u32) -> () {
     let tmp = *a;
     *a = *b;
     *b = tmp;
+}
+
+fn @max_2_f32(a: f32, b: f32) -> f32 {
+    if a < b { b } else { a }
+}
+
+fn @max_4_f32(a: f32, b: f32, c: f32, d: f32) -> f32 {
+    max_2_f32(max_2_f32(a,b), max_2_f32(c,d))
 }

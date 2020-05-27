@@ -1,3 +1,11 @@
+/* There are multiple types used for rendering
+ * > SpectralBase:        A four (and maybe more) sized vector base class used for spectral weights carried by rays
+ * > SpectralWavelength:  A SpectralBase used to carry wavelengths
+ * > SpectralWeight:      A SpectralBase used to represent weights for some wavelengths
+ * > SpectralPDF:         A SpectralBase used to represent PDFs for some wavelengths
+ * > Spectrum:            An abstract representation of a spectrum which returns weight/pdf for one arbitary wavelength
+ */
+
 struct SpectralBase {
     hero : f32,
     s1 : f32,
@@ -23,6 +31,8 @@ fn @make_spectral_wavelength(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralW
     }
 }
 
+//---------------------------
+// PDF
 fn @make_spectral_pdf(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralPDF {
     SpectralPDF {
         hero: hero,
@@ -32,6 +42,51 @@ fn @make_spectral_pdf(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralPDF {
     }
 }
 
+fn @make_spectral_pdf_splat(pdf: f32) -> SpectralPDF {
+    make_spectral_pdf(pdf, pdf, pdf, pdf)
+}
+
+fn @make_spectral_pdf_zero( ) -> SpectralPDF {
+    make_spectral_pdf_splat(0.0f)
+}
+
+fn @make_spectral_pdf_one( ) -> SpectralPDF {
+    make_spectral_pdf_splat(1.0f)
+}
+
+fn @make_spectral_pdf_hero_only(pdf: f32) -> SpectralPDF {
+    make_spectral_pdf(pdf, 0.0f, 0.0f, 0.0f)
+}
+
+fn @spectral_pdf_add(a: SpectralPDF, b: SpectralPDF) -> SpectralPDF {
+    make_spectral_pdf(a.hero + b.hero, a.s1 + b.s1, a.s2 + b.s2, a.s3 + b.s3)
+}
+
+fn @spectral_pdf_mul(a: SpectralPDF, b: SpectralPDF) -> SpectralPDF {
+    make_spectral_pdf(a.hero * b.hero, a.s1 * b.s1, a.s2 * b.s2, a.s3 * b.s3)
+}
+
+fn @spectral_pdf_mulf(s: SpectralPDF, f: f32) -> SpectralPDF {
+    make_spectral_pdf(s.hero * f, s.s1 * f, s.s2 * f, s.s3 * f)
+}
+
+fn @spectral_pdf_lerp(a: SpectralPDF, b: SpectralPDF, t: f32) -> SpectralPDF {
+    make_spectral_pdf((1.0f - t) * a.hero + t * b.hero,
+                        (1.0f - t) * a.s1 + t * b.s1,
+                        (1.0f - t) * a.s2 + t * b.s2,
+                        (1.0f - t) * a.s3 + t * b.s3)
+}
+
+fn @spectral_pdf_sum(a: SpectralPDF) -> f32 {
+    a.hero + a.s1 + a.s2 + a.s3
+}
+
+// Balance simplified mis weight
+fn @spectral_pdf_mis(a: SpectralPDF) -> f32 {
+    1.0f / spectral_pdf_sum(a)
+}
+
+//---------------------------
 fn @make_spectral_sample(wavelength: SpectralWavelength, pdf: SpectralPDF) -> SpectralSample {
     SpectralSample {
         wavelength: wavelength,
@@ -39,8 +94,9 @@ fn @make_spectral_sample(wavelength: SpectralWavelength, pdf: SpectralPDF) -> Sp
     }
 }
 
+//---------------------------
 // Spectral weight dependent operations
-fn @make_spectral(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralWeight {
+fn @make_spectral_weight(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralWeight {
     SpectralWeight {
         hero: hero,
         s1: s1,
@@ -49,51 +105,113 @@ fn @make_spectral(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralWeight {
     }
 }
 
-fn @spectral_add(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
-    make_spectral(a.hero + b.hero, a.s1 + b.s1, a.s2 + b.s2, a.s3 + b.s3)
+fn @make_spectral_weight_zero() -> SpectralWeight {
+    make_spectral_weight(0.0f, 0.0f, 0.0f, 0.0f)
 }
 
-fn @spectral_mul(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
-    make_spectral(a.hero * b.hero, a.s1 * b.s1, a.s2 * b.s2, a.s3 * b.s3)
+fn @make_spectral_weight_one() -> SpectralWeight {
+    make_spectral_weight(1.0f, 1.0f, 1.0f, 1.0f)
 }
 
-fn @spectral_mulf(s: SpectralWeight, f: f32) -> SpectralWeight {
-    make_spectral(s.hero * f, s.s1 * f, s.s2 * f, s.s3 * f)
+fn @spectral_weight_add(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
+    make_spectral_weight(a.hero + b.hero, a.s1 + b.s1, a.s2 + b.s2, a.s3 + b.s3)
 }
 
-fn @spectral_lerp(a: SpectralWeight, b: SpectralWeight, t: f32) -> SpectralWeight {
-    make_spectral((1.0f - t) * a.hero + t * b.hero,
-               (1.0f - t) * a.s1 + t * b.s1,
-               (1.0f - t) * a.s2 + t * b.s2,
-               (1.0f - t) * a.s3 + t * b.s3)
+fn @spectral_weight_mul(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
+    make_spectral_weight(a.hero * b.hero, a.s1 * b.s1, a.s2 * b.s2, a.s3 * b.s3)
 }
 
-fn @is_powerless(s: SpectralWeight) -> bool {
+fn @spectral_weight_mulf(s: SpectralWeight, f: f32) -> SpectralWeight {
+    make_spectral_weight(s.hero * f, s.s1 * f, s.s2 * f, s.s3 * f)
+}
+
+fn @spectral_weight_lerp(a: SpectralWeight, b: SpectralWeight, t: f32) -> SpectralWeight {
+    make_spectral_weight((1.0f - t) * a.hero + t * b.hero,
+                        (1.0f - t) * a.s1 + t * b.s1,
+                        (1.0f - t) * a.s2 + t * b.s2,
+                        (1.0f - t) * a.s3 + t * b.s3)
+}
+
+fn @spectral_weight_sum(a: SpectralWeight) -> f32 {
+    a.hero + a.s1 + a.s2 + a.s3
+}
+
+fn @spectral_weight_approx_luminance(a: SpectralWeight) -> f32 {
+    let n = spectral_weight_sum(a);
+    safe_div(max_4_f32(a.hero, a.s1, a.s2, a.s3), n)
+}
+
+fn @is_spectral_weight_powerless(s: SpectralWeight) -> bool {
     s.hero == 0.0f && s.s1 == 0.0f && s.s2 == 0.0f && s.s3 == 0.0f
 }
 
-fn @vec4_to_spectral(v: Vec4) -> SpectralWeight {
-    make_spectral(v.x, v.y, v.z, v.w)
+fn @vec4_to_spectral_weight(v: Vec4) -> SpectralWeight {
+    make_spectral_weight(v.x, v.y, v.z, v.w)
 }
 
-fn @spectral_to_vec4(s: SpectralWeight) -> Vec4 {
+fn @spectral_weight_to_vec4(s: SpectralWeight) -> Vec4 {
     make_vec4(s.hero, s.s1, s.s2, s.s3)
 }
 
-struct SpectralResponse {
+//---------------------------
+// Spectrum
+struct Spectrum {
     value: fn(f32) -> f32
 }
 
-fn @make_spectral_response_identity() -> SpectralResponse {
-    SpectralResponse {
-        value: @|_| { 1.0f }
+fn @make_spectrum(func: fn(f32) -> f32) -> Spectrum {
+    Spectrum {
+        value: func
     }
 }
 
-fn @spectral_integrate(s: SpectralWeight, w: SpectralWavelength, r: SpectralResponse) -> f32 {
+fn @make_spectrum_none() -> Spectrum {
+    make_spectrum(@|_| { 0.0f })
+}
+
+fn @make_spectrum_identity() -> Spectrum {
+    make_spectrum(@|_| { 1.0f })
+}
+
+fn @spectrum_add(a: Spectrum, b: Spectrum) -> Spectrum {
+    make_spectrum(@|v| { a.value(v) + b.value(v) })
+}
+
+fn @spectrum_mul(a: Spectrum, b: Spectrum) -> Spectrum {
+    make_spectrum(@|v| { a.value(v) * b.value(v) })
+}
+
+fn @spectrum_mulf(s: Spectrum, f: f32) -> Spectrum {
+    make_spectrum(@|v| { f * s.value(v) })
+}
+
+fn @spectrum_lerp(a: Spectrum, b: Spectrum, t: f32) -> Spectrum {
+    make_spectrum(@|v| { (1.0f-t) * a.value(v) + t * b.value(v) })
+}
+
+fn @spectrum_eval(s: Spectrum, wvl: SpectralWavelength) -> SpectralWeight {
+    make_spectral_weight(s.value(wvl.hero), s.value(wvl.s1), s.value(wvl.s2), s.value(wvl.s3))
+}
+
+fn @spectrum_eval_hero(s: Spectrum, wvl: SpectralWavelength) -> SpectralWeight {
+    make_spectral_weight(s.value(wvl.hero), 0.0f, 0.0f, 0.0f)
+}
+
+fn @spectral_integrate(s: SpectralWeight, w: SpectralWavelength, r: Spectrum) -> f32 {
     s.hero * r.value(w.hero) + s.s1 * r.value(w.s1) + s.s2 * r.value(w.s2) + s.s3 * r.value(w.s3)
 }
 
-fn @spectral_luminance(s: SpectralWeight) -> f32 {
-    spectral_integrate(s, make_spectral_wavelength(0.0f,0.0f,0.0f,0.0f), make_spectral_response_identity())
+// CoeffSpectrum
+// Base on Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling.
+// In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
+fn @make_coeff_spectrum(math: Intrinsics, cA: f32, cB: f32, cC: f32) -> Spectrum {
+    make_spectrum(@|wvl| {
+        let x = (cA * wvl + cB) * wvl + cC;
+		let y = 1.0f/math.sqrtf(x*x + 1.0f);
+        max_2_f32(0.5f * x * y + 0.5f, 0.0f)
+    })
+}
+
+fn @make_coeff_spectrum_v(math: Intrinsics, v: Vec3) -> Spectrum {
+    make_coeff_spectrum(math, v.x, v.y, v.z)
 }

@@ -2,7 +2,7 @@
 struct EmissionSample {
     pos: Vec3,          // Position on the light source
     dir: Vec3,          // Direction of the light going outwards
-    intensity: Color,   // Intensity along the direction
+    intensity: Spectrum,// Intensity along the direction
     pdf_area: f32,      // Probability to sample the point on the light
     pdf_dir: f32,       // Probability to sample the direction on the light, conditioned on the point on the light source
     cos: f32            // Cosine between the direction and the light source geometry
@@ -11,7 +11,7 @@ struct EmissionSample {
 // Result from sampling direct lighting from a light source
 struct DirectLightSample {
     pos: Vec3,          // Position on the light source
-    intensity: Color,   // Intensity along the direction
+    intensity: Spectrum,// Intensity along the direction
     pdf_area: f32,      // Probability to sample the point on the light
     pdf_dir: f32,       // Probability to sample the direction using emission sampling
     cos: f32            // Cosine between the direction and the light source geometry
@@ -19,7 +19,7 @@ struct DirectLightSample {
 
 // Emission properties of a light source
 struct EmissionValue {
-    intensity: Color,   // Intensity along the direction
+    intensity: Spectrum,// Intensity along the direction
     pdf_area: f32,      // Probability to sample the point on the light
     pdf_dir: f32        // Probability to sample the direction using emission sampling
 }
@@ -43,7 +43,7 @@ struct Light {
     has_area: bool
 }
 
-fn @make_emission_sample(pos: Vec3, dir: Vec3, intensity: Color, pdf_area: f32, pdf_dir: f32, cos: f32) -> EmissionSample {
+fn @make_emission_sample(pos: Vec3, dir: Vec3, intensity: Spectrum, pdf_area: f32, pdf_dir: f32, cos: f32) -> EmissionSample {
     if pdf_area > 0.0f && pdf_dir > 0.0f && cos > 0.0f {
         EmissionSample {
             pos: pos,
@@ -57,7 +57,7 @@ fn @make_emission_sample(pos: Vec3, dir: Vec3, intensity: Color, pdf_area: f32, 
         EmissionSample {
             pos: pos,
             dir: dir,
-            intensity: black,
+            intensity: make_spectrum_none(),
             pdf_area: 1.0f,
             pdf_dir: 1.0f,
             cos: 1.0f
@@ -65,7 +65,7 @@ fn @make_emission_sample(pos: Vec3, dir: Vec3, intensity: Color, pdf_area: f32, 
     }
 }
 
-fn @make_direct_sample(pos: Vec3, intensity: Color, pdf_area: f32, pdf_dir: f32, cos: f32) -> DirectLightSample {
+fn @make_direct_sample(pos: Vec3, intensity: Spectrum, pdf_area: f32, pdf_dir: f32, cos: f32) -> DirectLightSample {
     if pdf_area > 0.0f && pdf_dir > 0.0f && cos > 0.0f {
         DirectLightSample {
             pos: pos,
@@ -77,7 +77,7 @@ fn @make_direct_sample(pos: Vec3, intensity: Color, pdf_area: f32, pdf_dir: f32,
     } else {
         DirectLightSample {
             pos: pos,
-            intensity: black,
+            intensity: make_spectrum_none(),
             pdf_area: 1.0f,
             pdf_dir: 1.0f,
             cos: 0.0f
@@ -85,7 +85,15 @@ fn @make_direct_sample(pos: Vec3, intensity: Color, pdf_area: f32, pdf_dir: f32,
     }
 }
 
-fn @make_emission_value(intensity: Color, pdf_area: f32, pdf_dir: f32) -> EmissionValue {
+fn @make_emission_value_none() -> EmissionValue {
+    EmissionValue {
+        intensity: make_spectrum_none(),
+        pdf_area: 1.0f,
+        pdf_dir: 1.0f
+    }
+}
+
+fn @make_emission_value(intensity: Spectrum, pdf_area: f32, pdf_dir: f32) -> EmissionValue {
     if pdf_dir > 0.0f {
         EmissionValue {
             intensity: intensity,
@@ -93,33 +101,29 @@ fn @make_emission_value(intensity: Color, pdf_area: f32, pdf_dir: f32) -> Emissi
             pdf_dir: pdf_dir
         }
     } else {
-        EmissionValue {
-            intensity: black,
-            pdf_area: 1.0f,
-            pdf_dir: 1.0f
-        }
+        make_emission_value_none()
     }
 }
 
-fn @make_point_light(math: Intrinsics, pos: Vec3, color: Color) -> Light {
+fn @make_point_light(math: Intrinsics, pos: Vec3, color: Spectrum) -> Light {
     Light {
         sample_direct: @ |rnd, from| {
-            let intensity = color_mulf(color, 1.0f / (4.0f * flt_pi));
+            let intensity = spectrum_mulf(color, 1.0f / (4.0f * flt_pi));
             make_direct_sample(pos, intensity, 1.0f, uniform_sphere_pdf(), 1.0f)
         },
         sample_emission: @ |rnd| {
             let u = randf(rnd);
             let v = randf(rnd);
             let sample = sample_uniform_sphere(math, u, v);
-            let intensity = color_mulf(color, 1.0f / (4.0f * flt_pi));
+            let intensity = spectrum_mulf(color, 1.0f / (4.0f * flt_pi));
             make_emission_sample(pos, sample.dir, intensity, 1.0f, sample.pdf, 1.0f)
         },
-        emission: @ |_, _| make_emission_value(black, 1.0f, 1.0f),
+        emission: @ |_, _| make_emission_value(make_spectrum_none(), 1.0f, 1.0f),
         has_area: false
     }
 }
 
-fn @make_area_light(math: Intrinsics, area: AreaEmitter, color: Color) -> Light {
+fn @make_area_light(math: Intrinsics, area: AreaEmitter, color: Spectrum) -> Light {
     Light {
         sample_direct: @ |rnd, from| {
             let (pos, n, area_pdf) = area.sample(make_vec2(randf(rnd), randf(rnd)));
@@ -137,14 +141,14 @@ fn @make_area_light(math: Intrinsics, area: AreaEmitter, color: Color) -> Light 
     }
 }
 
-fn @make_triangle_light(math: Intrinsics, v0: Vec3, v1: Vec3, v2: Vec3, color: Color) -> Light {
+fn @make_triangle_light(math: Intrinsics, v0: Vec3, v1: Vec3, v2: Vec3, color: Spectrum) -> Light {
     let n_ = vec3_cross(vec3_sub(v1, v0), vec3_sub(v2, v0));
     let inv_area = 1.0f / (0.5f * sqrt_newton(vec3_len2(n_), 1e-5f));
     let n = vec3_mulf(n_, 0.5f * inv_area);
     make_precomputed_triangle_light(math, v0, v1, v2, n, inv_area, color)
 }
 
-fn @make_precomputed_triangle_light(math: Intrinsics, v0: Vec3, v1: Vec3, v2: Vec3, n: Vec3, inv_area: f32, color: Color) -> Light {
+fn @make_precomputed_triangle_light(math: Intrinsics, v0: Vec3, v1: Vec3, v2: Vec3, n: Vec3, inv_area: f32, color: Spectrum) -> Light {
     let emitter = AreaEmitter {
         sample: @ |uv| (sample_triangle(uv.x, uv.y, v0, v1, v2), n, inv_area),
         normal: @ |_| n,

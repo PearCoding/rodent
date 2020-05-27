@@ -1,0 +1,41 @@
+# Blender MTL File: 'torusglass.blend'
+# Material Count: 4
+
+newmtl Glass
+Ka 0 0 0 
+Kd 0 0 0 
+Ks 1 1 1
+Tf 1 1 1
+Ke 0 0 0
+Ni 1.55
+illum 7
+
+newmtl Ground
+Ns 320
+Ni 1.0000
+Ka 1 1 1
+Kd 0.8 0.8 0.8
+Ks 0 0 0
+Ke 0 0 0
+Tf 0 0 0
+illum 2
+
+newmtl Light
+illum 2
+Ns 1.0000
+Ni 1.0000
+Ka 0.78 0.78 0.78 # White
+Kd 0.78 0.78 0.78
+Ks 0 0 0
+Ke 17 12 4
+Tf 0 0 0
+
+newmtl Torus
+Ns 222
+Ni 1.0000
+Ka 0.0 1.0 0.3
+Kd 0.0 1.0 0.3
+Ks 0.1 0.9 0.2
+Ke 0 0 0
+Tf 0 0 0
+illum 2

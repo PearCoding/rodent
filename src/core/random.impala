@@ -125,8 +125,9 @@ fn @fnv_hash(mut h: u32, d: u32) -> u32 {
 }
 
 // Returns the probability to continue given the contribution of a path
-fn @russian_roulette(c: Color, clamp: f32) -> f32 {
-    let prob = 2.0f * color_luminance(c);
+fn @russian_roulette(c: SpectralWeight, clamp: f32) -> f32 {
+    //let prob = 2.0f * color_luminance(c);
+    let prob = 2.0f * spectral_weight_approx_luminance(c);
     if prob > clamp { clamp } else { prob }
 }
 
@@ -136,9 +137,9 @@ fn @sample_spectral_sample(math: Intrinsics, u: f32, wavelength_start: f32, wave
     let hero = u*span;
     let delta = span/4.0f;
     let wavelengths = make_spectral_wavelength(hero+wavelength_start,
-        math.fmodf(u+1.0f*delta, span)+wavelength_start,
-        math.fmodf(u+2.0f*delta, span)+wavelength_start,
-        math.fmodf(u+3.0f*delta, span)+wavelength_start);
+        math.fmodf(hero+1.0f*delta, span)+wavelength_start,
+        math.fmodf(hero+2.0f*delta, span)+wavelength_start,
+        math.fmodf(hero+3.0f*delta, span)+wavelength_start);
     let pdf = spectral_sample_pdf(u, wavelength_start, wavelength_end);
     let pdfs = make_spectral_pdf(pdf, pdf, pdf, pdf);
 

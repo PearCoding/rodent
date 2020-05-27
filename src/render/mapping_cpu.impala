@@ -66,6 +66,10 @@ extern fn cpu_sort_primary(primary: &PrimaryStream, ray_begins: &mut [i32], ray_
                 swap_f32(&mut primary.rays.dir_x(k), &mut primary.rays.dir_x(j));
                 swap_f32(&mut primary.rays.dir_y(k), &mut primary.rays.dir_y(j));
                 swap_f32(&mut primary.rays.dir_z(k), &mut primary.rays.dir_z(j));
+                swap_f32(&mut primary.rays.wvl_hero(k), &mut primary.rays.wvl_hero(j));
+                swap_f32(&mut primary.rays.wvl_s1(k), &mut primary.rays.wvl_s1(j));
+                swap_f32(&mut primary.rays.wvl_s2(k), &mut primary.rays.wvl_s2(j));
+                swap_f32(&mut primary.rays.wvl_s3(k), &mut primary.rays.wvl_s3(j));
                 swap_f32(&mut primary.rays.tmin(k),  &mut primary.rays.tmin(j));
                 swap_f32(&mut primary.rays.tmax(k),  &mut primary.rays.tmax(j));
 
@@ -76,9 +80,10 @@ extern fn cpu_sort_primary(primary: &PrimaryStream, ray_begins: &mut [i32], ray_
                 swap_f32(&mut primary.v(k),         &mut primary.v(j));
                 swap_u32(&mut primary.rnd(k),       &mut primary.rnd(j));
                 swap_f32(&mut primary.mis(k),       &mut primary.mis(j));
-                swap_f32(&mut primary.contrib_r(k), &mut primary.contrib_r(j));
-                swap_f32(&mut primary.contrib_g(k), &mut primary.contrib_g(j));
-                swap_f32(&mut primary.contrib_b(k), &mut primary.contrib_b(j));
+                swap_f32(&mut primary.contrib_hero(k), &mut primary.contrib_hero(j));
+                swap_f32(&mut primary.contrib_s1(k), &mut primary.contrib_s1(j));
+                swap_f32(&mut primary.contrib_s2(k), &mut primary.contrib_s2(j));
+                swap_f32(&mut primary.contrib_s3(k), &mut primary.contrib_s3(j));
                 swap_i32(&mut primary.depth(k),     &mut primary.depth(j));
             } else {
                 j++;
@@ -97,6 +102,10 @@ fn @cpu_compact_ray_stream(rays: RayStream, i: i32, j: i32, mask: bool) -> () {
     rays.dir_x(i) = rv_compact(rays.dir_x(j), mask);
     rays.dir_y(i) = rv_compact(rays.dir_y(j), mask);
     rays.dir_z(i) = rv_compact(rays.dir_z(j), mask);
+    rays.wvl_hero(i) = rv_compact(rays.wvl_hero(j), mask);
+    rays.wvl_s1(i) = rv_compact(rays.wvl_s1(j), mask);
+    rays.wvl_s2(i) = rv_compact(rays.wvl_s2(j), mask);
+    rays.wvl_s3(i) = rv_compact(rays.wvl_s3(j), mask);
     rays.tmin(i)  = rv_compact(rays.tmin(j), mask);
     rays.tmax(i)  = rv_compact(rays.tmax(j), mask);
 }
@@ -108,6 +117,10 @@ fn @cpu_move_ray_stream(rays: RayStream, i: i32, j: i32) -> () {
     rays.dir_x(i) = rays.dir_x(j);
     rays.dir_y(i) = rays.dir_y(j);
     rays.dir_z(i) = rays.dir_z(j);
+    rays.wvl_hero(i) = rays.wvl_hero(j);
+    rays.wvl_s1(i) = rays.wvl_s1(j);
+    rays.wvl_s2(i) = rays.wvl_s2(j);
+    rays.wvl_s3(i) = rays.wvl_s3(j);
     rays.tmin(i)  = rays.tmin(j);
     rays.tmax(i)  = rays.tmax(j);
 }
@@ -127,9 +140,10 @@ fn @cpu_compact_primary(primary: &PrimaryStream, vector_width: i32, vector_compa
 
                     primary.rnd(k + j)       = bitcast[u32](rv_compact(bitcast[f32](primary.rnd(i + j)), mask));
                     primary.mis(k + j)       = rv_compact(primary.mis(i + j), mask);
-                    primary.contrib_r(k + j) = rv_compact(primary.contrib_r(i + j), mask);
-                    primary.contrib_g(k + j) = rv_compact(primary.contrib_g(i + j), mask);
-                    primary.contrib_b(k + j) = rv_compact(primary.contrib_b(i + j), mask);
+                    primary.contrib_hero(k + j) = rv_compact(primary.contrib_hero(i + j), mask);
+                    primary.contrib_s1(k + j) = rv_compact(primary.contrib_s1(i + j), mask);
+                    primary.contrib_s2(k + j) = rv_compact(primary.contrib_s2(i + j), mask);
+                    primary.contrib_s3(k + j) = rv_compact(primary.contrib_s3(i + j), mask);
                     primary.depth(k + j)     = bitcast[i32](rv_compact(bitcast[f32](primary.depth(i + j)), mask));
 
                     k += cpu_popcount32(rv_ballot(mask));
@@ -143,9 +157,10 @@ fn @cpu_compact_primary(primary: &PrimaryStream, vector_width: i32, vector_compa
                     cpu_move_ray_stream(primary.rays, k, i);
                     primary.rnd(k)       = primary.rnd(i);
                     primary.mis(k)       = primary.mis(i);
-                    primary.contrib_r(k) = primary.contrib_r(i);
-                    primary.contrib_g(k) = primary.contrib_g(i);
-                    primary.contrib_b(k) = primary.contrib_b(i);
+                    primary.contrib_hero(k) = primary.contrib_hero(i);
+                    primary.contrib_s1(k) = primary.contrib_s1(i);
+                    primary.contrib_s2(k) = primary.contrib_s2(i);
+                    primary.contrib_s3(k) = primary.contrib_s3(i);
                     primary.depth(k)     = primary.depth(i);
                     k++;
                 }
@@ -170,9 +185,10 @@ fn @cpu_compact_secondary(secondary: &SecondaryStream, vector_width: i32, vector
                     cpu_compact_ray_stream(secondary.rays, k + j, i + j, mask);
 
                     secondary.prim_id(k + j) = bitcast[i32](rv_compact(bitcast[f32](secondary.prim_id(i + j)), mask));
-                    secondary.color_r(k + j) = rv_compact(secondary.color_r(i + j), mask);
-                    secondary.color_g(k + j) = rv_compact(secondary.color_g(i + j), mask);
-                    secondary.color_b(k + j) = rv_compact(secondary.color_b(i + j), mask);
+                    secondary.color_hero(k + j) = rv_compact(secondary.color_hero(i + j), mask);
+                    secondary.color_s1(k + j) = rv_compact(secondary.color_s1(i + j), mask);
+                    secondary.color_s2(k + j) = rv_compact(secondary.color_s2(i + j), mask);
+                    secondary.color_s3(k + j) = rv_compact(secondary.color_s3(i + j), mask);
 
                     k += cpu_popcount32(rv_ballot(mask));
                 }
@@ -184,9 +200,10 @@ fn @cpu_compact_secondary(secondary: &SecondaryStream, vector_width: i32, vector
                     secondary.rays.id(k) = id;
                     cpu_move_ray_stream(secondary.rays, k, i);
                     secondary.prim_id(k) = secondary.prim_id(i);
-                    secondary.color_r(k) = secondary.color_r(i);
-                    secondary.color_g(k) = secondary.color_g(i);
-                    secondary.color_b(k) = secondary.color_b(i);
+                    secondary.color_hero(k) = secondary.color_hero(i);
+                    secondary.color_s1(k) = secondary.color_s1(i);
+                    secondary.color_s2(k) = secondary.color_s2(i);
+                    secondary.color_s3(k) = secondary.color_s3(i);
                     k++;
                 }
             } 
@@ -268,7 +285,7 @@ fn @cpu_traverse_secondary(scene: Scene, min_max: MinMax, secondary: &SecondaryS
     ($cpu_traverse_secondary_specialized)(secondary);
 }
 
-fn @cpu_shade(geom_id: i32, primary: &PrimaryStream, secondary: &SecondaryStream, scene: Scene, path_tracer: PathTracer, accumulate: fn (i32, Color) -> (), begin: i32, end: i32, vector_width: i32) -> () {
+fn @cpu_shade(geom_id: i32, primary: &PrimaryStream, secondary: &SecondaryStream, scene: Scene, path_tracer: PathTracer, accumulate: fn (i32, SpectralWavelength, SpectralWeight) -> (), begin: i32, end: i32, vector_width: i32) -> () {
     fn cpu_shade_specialized(primary: &PrimaryStream, secondary: &SecondaryStream, begin: i32, end: i32) -> () {
         let read_primary_ray    = make_ray_stream_reader(primary.rays, 1);
         let read_primary_hit    = make_primary_stream_hit_reader(*primary, 1);
@@ -294,7 +311,7 @@ fn @cpu_shade(geom_id: i32, primary: &PrimaryStream, secondary: &SecondaryStream
                     hit_color = color;
                     break()
                 }, @ || -> ! {
-                    hit_color = make_color(0.0f, 0.0f, 0.0f);
+                    hit_color = make_spectral_weight_zero();
                     break()
                 })
             }
@@ -302,10 +319,17 @@ fn @cpu_shade(geom_id: i32, primary: &PrimaryStream, secondary: &SecondaryStream
             for lane in unroll(0, vector_width) {
                 let j = bitcast[i32](rv_extract(bitcast[f32](ray_id), lane));
                 accumulate(j,
-                    make_color(
-                        rv_extract(hit_color.r, lane),
-                        rv_extract(hit_color.g, lane),
-                        rv_extract(hit_color.b, lane)
+                    make_spectral_wavelength(
+                        rv_extract(ray.wvl.hero, lane),
+                        rv_extract(ray.wvl.s1, lane),
+                        rv_extract(ray.wvl.s2, lane),
+                        rv_extract(ray.wvl.s3, lane)
+                    ),
+                    make_spectral_weight(
+                        rv_extract(hit_color.hero, lane),
+                        rv_extract(hit_color.s1, lane),
+                        rv_extract(hit_color.s2, lane),
+                        rv_extract(hit_color.s3, lane)
                     )
                 );
             }
@@ -314,9 +338,10 @@ fn @cpu_shade(geom_id: i32, primary: &PrimaryStream, secondary: &SecondaryStream
             for once() {
                 @@(path_tracer.on_shadow)(ray, hit, &mut state, surf, mat, @ |ray, color| -> ! {
                     write_secondary_ray(i, 0, ray);
-                    secondary.color_r(i) = color.r;
-                    secondary.color_g(i) = color.g;
-                    secondary.color_b(i) = color.b;
+                    secondary.color_hero(i) = color.hero;
+                    secondary.color_s1(i) = color.s1;
+                    secondary.color_s2(i) = color.s2;
+                    secondary.color_s3(i) = color.s3;
                     secondary.rays.id(i) = ray_id;
                     break()
                 }, @ || -> ! {
@@ -350,6 +375,7 @@ fn @cpu_get_film_data() -> (&mut [f32], i32, i32) {
 }
 
 fn @cpu_trace( scene: Scene
+             , tonemapper: ToneMapper
              , path_tracer: PathTracer
              , min_max: MinMax
              , single: bool
@@ -362,12 +388,14 @@ fn @cpu_trace( scene: Scene
              ) -> () {
     let (film_pixels, film_width, film_height) = cpu_get_film_data();
 
-    fn @accumulate(pixel: i32, color: Color) -> () {
+    fn @accumulate(pixel: i32, wvl: SpectralWavelength, weights: SpectralWeight) -> () {
         let inv = 1.0f / (spp as f32);
+        let color = tonemapper.map(wvl, weights);
         film_pixels(pixel * 3 + 0) += color.r * inv;
         film_pixels(pixel * 3 + 1) += color.g * inv;
         film_pixels(pixel * 3 + 2) += color.b * inv;
     }
+
     let mut primary_counter = 0i64;
     let mut bounces_counter = 0i64;
     let mut shadow_counter  = 0i64;
@@ -438,10 +466,17 @@ fn @cpu_trace( scene: Scene
                     if secondary.prim_id(i) < 0 {
                         let j = secondary.rays.id(i);
                         accumulate(j,
-                            make_color(
-                                secondary.color_r(i),
-                                secondary.color_g(i),
-                                secondary.color_b(i)
+                            make_spectral_wavelength(
+                                secondary.rays.wvl_hero(i),
+                                secondary.rays.wvl_s1(i),
+                                secondary.rays.wvl_s2(i),
+                                secondary.rays.wvl_s3(i)
+                            ),
+                            make_spectral_weight(
+                                secondary.color_hero(i),
+                                secondary.color_s1(i),
+                                secondary.color_s2(i),
+                                secondary.color_s3(i)
                             )
                         );
                     }
@@ -477,9 +512,10 @@ fn @cpu_trace( scene: Scene
 fn @make_cpu_device(use_embree: bool, vector_compact: bool, single: bool, min_max: MinMax, vector_width: i32, num_cores: i32, tile_size: i32) -> Device {
     Device {
         intrinsics: cpu_intrinsics,
-        trace: @ |scene, path_tracer, spp| {
+        trace: @ |scene, tonemapper, path_tracer, spp| {
             cpu_trace(
                 scene,
+                tonemapper,
                 path_tracer,
                 min_max,
                 single,

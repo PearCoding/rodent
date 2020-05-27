@@ -55,4 +55,7 @@ inline rgba clamp(const rgba& val, const rgba& min, const rgba& max) {
                 clamp(val.w, min.w, max.w));
 }
 
+inline float luminance(const rgb& c) {
+    return 0.2126f*c.x + 0.7152f*c.y + 0.0722f*c.z;
+}
 #endif // COLOR_H

@@ -19,12 +19,13 @@ struct Prim {
 }
 
 struct Ray {
-    org: Vec3,     // Origin of the ray
-    dir: Vec3,     // Direction of the ray
-    inv_dir: Vec3, // Inverse of the direction
-    inv_org: Vec3, // Origin multiplied by the inverse of the direction
-    tmin: f32,     // Minimum distance from the origin
-    tmax: f32      // Maximum distance from the origin
+    org: Vec3,                  // Origin of the ray
+    dir: Vec3,                  // Direction of the ray
+    inv_dir: Vec3,              // Inverse of the direction
+    inv_org: Vec3,              // Origin multiplied by the inverse of the direction
+    wvl: SpectralWavelength,    // Associated wavelengths
+    tmin: f32,                  // Minimum distance from the origin
+    tmax: f32                   // Maximum distance from the origin
 }
 
 struct Hit {
@@ -85,7 +86,7 @@ fn @make_default_min_max() -> MinMax {
     make_min_max(fminf, fmaxf, false)
 }
 
-fn @make_ray(org: Vec3, dir: Vec3, tmin: f32, tmax: f32) -> Ray {
+fn @make_ray(org: Vec3, dir: Vec3, wvl: SpectralWavelength, tmin: f32, tmax: f32) -> Ray {
     let inv_dir = make_vec3(safe_rcp(dir.x), safe_rcp(dir.y), safe_rcp(dir.z));
     let inv_org = vec3_neg(vec3_mul(org, inv_dir));
     Ray {
@@ -93,6 +94,7 @@ fn @make_ray(org: Vec3, dir: Vec3, tmin: f32, tmax: f32) -> Ray {
         dir: dir,
         inv_dir: inv_dir,
         inv_org: inv_org,
+        wvl: wvl,
         tmin: tmin,
         tmax: tmax
     }

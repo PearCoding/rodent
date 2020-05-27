@@ -283,6 +283,7 @@ fn @cpu_traverse_hybrid_helper( mut ray: Ray
         dir: make_vec3(rv_load(&ray_ptr.dir.x, lane), rv_load(&ray_ptr.dir.y, lane), rv_load(&ray_ptr.dir.z, lane)),
         inv_org: make_vec3(rv_load(&ray_ptr.inv_org.x, lane), rv_load(&ray_ptr.inv_org.y, lane), rv_load(&ray_ptr.inv_org.z, lane)),
         inv_dir: make_vec3(rv_load(&ray_ptr.inv_dir.x, lane), rv_load(&ray_ptr.inv_dir.y, lane), rv_load(&ray_ptr.inv_dir.z, lane)),
+        wvl: make_spectral_wavelength(rv_load(&ray_ptr.wvl.hero, lane), rv_load(&ray_ptr.wvl.s1, lane), rv_load(&ray_ptr.wvl.s2, lane), rv_load(&ray_ptr.wvl.s3, lane)),
         tmin: rv_load(&ray_ptr.tmin, lane),
         tmax: rv_load(&ray_ptr.tmax, lane)
     };

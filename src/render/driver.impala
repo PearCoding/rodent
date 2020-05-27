@@ -29,9 +29,13 @@ struct RayStream {
     dir_x: &mut [f32],
     dir_y: &mut [f32],
     dir_z: &mut [f32],
+    wvl_hero: &mut [f32],
+    wvl_s1: &mut [f32],
+    wvl_s2: &mut [f32],
+    wvl_s3: &mut [f32],
     tmin: &mut [f32],
     tmax: &mut [f32],
-}
+}// (13)
 
 struct PrimaryStream {
     rays: RayStream,
@@ -42,23 +46,25 @@ struct PrimaryStream {
     v: &mut [f32],
     rnd: &mut [RndState],
     mis: &mut [f32],
-    contrib_r: &mut [f32],
-    contrib_g: &mut [f32],
-    contrib_b: &mut [f32],
+    contrib_hero: &mut [f32],
+    contrib_s1: &mut [f32],
+    contrib_s2: &mut [f32],
+    contrib_s3: &mut [f32],
     depth: &mut [i32],
     size: i32,
     pad: i32 // TODO: Needed for AMDGPU backend
-}
+}// (25+1)
 
 struct SecondaryStream {
     rays: RayStream,
     prim_id: &mut [i32],
-    color_r: &mut [f32],
-    color_g: &mut [f32],
-    color_b: &mut [f32],
+    color_hero: &mut [f32],
+    color_s1: &mut [f32],
+    color_s2: &mut [f32],
+    color_s3: &mut [f32],
     size: i32,
     pad: i32 // TODO: Needed for AMDGPU backend
-}
+}// (18+1)
 
 fn @make_ray_stream_reader(rays: RayStream, vector_width: i32) -> fn (i32, i32) -> Ray {
     @ |i, j| {
@@ -70,6 +76,7 @@ fn @make_ray_stream_reader(rays: RayStream, vector_width: i32) -> fn (i32, i32) 
             make_vec3(rays.dir_x(k),
                       rays.dir_y(k),
                       rays.dir_z(k)),
+            make_spectral_weight(rays.wvl_hero(k), rays.wvl_s1(k), rays.wvl_s2(k), rays.wvl_s3(k)),
             rays.tmin(k),
             rays.tmax(k)
         )
@@ -79,14 +86,18 @@ fn @make_ray_stream_reader(rays: RayStream, vector_width: i32) -> fn (i32, i32) 
 fn @make_ray_stream_writer(rays: RayStream, vector_width: i32) -> fn (i32, i32, Ray) -> () {
     @ |i, j, ray| {
         let k = i * vector_width + j;
-        rays.org_x(k) = ray.org.x;
-        rays.org_y(k) = ray.org.y;
-        rays.org_z(k) = ray.org.z;
-        rays.dir_x(k) = ray.dir.x;
-        rays.dir_y(k) = ray.dir.y;
-        rays.dir_z(k) = ray.dir.z;
-        rays.tmin(k)  = ray.tmin;
-        rays.tmax(k)  = ray.tmax;
+        rays.org_x(k)   = ray.org.x;
+        rays.org_y(k)   = ray.org.y;
+        rays.org_z(k)   = ray.org.z;
+        rays.dir_x(k)   = ray.dir.x;
+        rays.dir_y(k)   = ray.dir.y;
+        rays.dir_z(k)   = ray.dir.z;
+        rays.wvl_hero(k)= ray.wvl.hero;
+        rays.wvl_s1(k)  = ray.wvl.s1;
+        rays.wvl_s2(k)  = ray.wvl.s2;
+        rays.wvl_s3(k)  = ray.wvl.s3;
+        rays.tmin(k)    = ray.tmin;
+        rays.tmax(k)    = ray.tmax;
     }
 }
 
@@ -126,7 +137,7 @@ fn @make_primary_stream_state_reader(primary: PrimaryStream, vector_width: i32) 
         let k = i * vector_width + j;
         RayState {
             rnd:     primary.rnd(k),
-            contrib: make_color(primary.contrib_r(k), primary.contrib_g(k), primary.contrib_b(k)),
+            contrib: make_spectral_weight(primary.contrib_hero(k), primary.contrib_s1(k), primary.contrib_s2(k), primary.contrib_s3(k)),
             mis:     primary.mis(k),
             depth:   primary.depth(k)
         }
@@ -136,11 +147,12 @@ fn @make_primary_stream_state_reader(primary: PrimaryStream, vector_width: i32) 
 fn @make_primary_stream_state_writer(primary: PrimaryStream, vector_width: i32) -> fn (i32, i32, RayState) -> () {
     @ |i, j, state| {
         let k = i * vector_width + j;
-        primary.rnd(k)       = state.rnd;
-        primary.contrib_r(k) = state.contrib.r;
-        primary.contrib_g(k) = state.contrib.g;
-        primary.contrib_b(k) = state.contrib.b;
-        primary.mis(k)       = state.mis;
-        primary.depth(k)     = state.depth;
+        primary.rnd(k)          = state.rnd;
+        primary.contrib_hero(k) = state.contrib.hero;
+        primary.contrib_s1(k)   = state.contrib.s1;
+        primary.contrib_s2(k)   = state.contrib.s2;
+        primary.contrib_s3(k)   = state.contrib.s3;
+        primary.mis(k)          = state.mis;
+        primary.depth(k)        = state.depth;
     }
 }

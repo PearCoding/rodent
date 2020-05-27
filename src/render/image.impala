@@ -1,6 +1,6 @@
-// Images are discrete collections of pixels with a fixed number of channels
+// Images are discrete collections of pixels with spectrals
 struct Image {
-    pixels:   fn (i32, i32) -> Color,
+    pixels:   fn (i32, i32) -> Spectrum,
     width:    i32,
     height:   i32
 }
@@ -10,10 +10,10 @@ struct BorderHandling {
     vert: fn (Intrinsics, f32) -> f32
 }
 
-type Texture = fn (Vec2) -> Color;
-type ImageFilter = fn (Intrinsics, Image, Vec2) -> Color;
+type Texture = fn (Vec2) -> Spectrum;
+type ImageFilter = fn (Intrinsics, Image, Vec2) -> Spectrum;
 
-fn @make_image(pixels: fn (i32, i32) -> Color, width: i32, height: i32) -> Image {
+fn @make_image(pixels: fn (i32, i32) -> Spectrum, width: i32, height: i32) -> Image {
     Image {
         pixels:   pixels,
         width:    width,
@@ -21,7 +21,13 @@ fn @make_image(pixels: fn (i32, i32) -> Color, width: i32, height: i32) -> Image
     }
 }
 
+fn @make_image_black(width: i32, height: i32) -> Image {
+    make_image(@|_,_|{ make_spectrum_none() }, width, height)
+}
+
 fn @make_image_rgba32(pixels: fn (i32, i32) -> u32, width: i32, height: i32) -> Image {
+    // TODO
+    /*
     Image {
         pixels: @ |x, y| {
             let pixel = pixels(x, y);
@@ -34,7 +40,8 @@ fn @make_image_rgba32(pixels: fn (i32, i32) -> u32, width: i32, height: i32) -> 
         },
         width:    width,
         height:   height
-    }
+    }*/
+    make_image_black(width, height)
 }
 
 fn @make_clamp_border() -> BorderHandling {
@@ -76,10 +83,8 @@ fn @make_bilinear_filter() -> ImageFilter {
         let p01 = img.pixels(x0, y1);
         let p11 = img.pixels(x1, y1);
 
-        let interp = @ |x00, x10, x01, x11| lerp(lerp(x00, x10, kx), lerp(x01, x11, kx), ky);
-        make_color(interp(p00.r, p10.r, p01.r, p11.r),
-                   interp(p00.g, p10.g, p01.g, p11.g),
-                   interp(p00.b, p10.b, p01.b, p11.b))
+        let interp = @ |x00, x10, x01, x11| spectrum_lerp(spectrum_lerp(x00, x10, kx), spectrum_lerp(x01, x11, kx), ky);
+        interp(p00, p10, p01, p11)
     }
 }
 

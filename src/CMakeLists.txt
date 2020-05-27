@@ -24,6 +24,7 @@ set(RODENT_SRCS
     core/color.impala
     core/common.impala
     core/cpu_common.impala
+    core/illumination.impala
     core/matrix.impala
     core/random.impala
     core/sort.impala
@@ -39,6 +40,7 @@ set(RODENT_SRCS
     render/driver.impala
     render/mapping_cpu.impala
     render/mapping_gpu.impala
+    render/tonemapper.impala
     traversal/intersection.impala
     traversal/stack.impala
     traversal/mapping_cpu.impala
@@ -58,7 +60,9 @@ set(DRIVER_SRCS
     driver/float4.h
     driver/file_path.h
     driver/common.h
-    driver/color.h)
+    driver/color.h
+    driver/spectral.h
+    driver/spectral.cpp)
 
 set(CONVERTER_SRCS
     driver/converter.cpp
@@ -66,7 +70,9 @@ set(CONVERTER_SRCS
     driver/obj.h
     driver/file_path.h
     driver/interface.h
-    driver/bvh.h)
+    driver/bvh.h
+    driver/spectral.h
+    driver/spectral.cpp)
 
 anydsl_runtime_wrap(RODENT_OBJS
     NAME "rodent"
@@ -108,6 +114,7 @@ if(EXISTS ${SCENE_FILE_MTL})
 endif()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/main.impala
+    COMMAND ${CMAKE_COMMAND} -E copy ../tools/upsampler/srgb.coeff ${CMAKE_BINARY_DIR}/srgb.coeff 
     COMMAND converter ${SCENE_FILE} ${CONVERTER_OPTIONS} --max-path-len ${MAX_PATH_LEN} --samples-per-pixel ${SPP}
     COMMAND ${CMAKE_COMMAND} -E rename ${CMAKE_BINARY_DIR}/main.impala ${CMAKE_CURRENT_BINARY_DIR}/main.impala
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

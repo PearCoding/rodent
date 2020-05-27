@@ -27,6 +27,8 @@ using Bvh4Tri4 = Bvh<Node4, Tri4>;
 using Bvh8Tri4 = Bvh<Node8, Tri4>;
 
 #ifdef ENABLE_EMBREE_DEVICE
+#error Embree integration is broken due to spectral tracing!
+
 #if EMBREE_VERSION == 3
 #include <embree3/rtcore.h>
 #else
@@ -365,24 +367,27 @@ struct Interface {
         return array;
     }
 
+#define RAY_STREAM_SIZE (13)
+#define PRIMARY_SIZE (RAY_STREAM_SIZE + 12)
+#define SECONDARY_SIZE (RAY_STREAM_SIZE + 5)
     anydsl::Array<float>& cpu_primary_stream(size_t size) {
-        return resize_array(0, cpu_primary, size, 20);
+        return resize_array(0, cpu_primary, size, PRIMARY_SIZE);
     }
 
     anydsl::Array<float>& cpu_secondary_stream(size_t size) {
-        return resize_array(0, cpu_secondary, size, 13);
+        return resize_array(0, cpu_secondary, size, SECONDARY_SIZE);
     }
 
     anydsl::Array<float>& gpu_first_primary_stream(int32_t dev, size_t size) {
-        return resize_array(dev, devices[dev].first_primary, size, 20);
+        return resize_array(dev, devices[dev].first_primary, size, PRIMARY_SIZE);
     }
 
     anydsl::Array<float>& gpu_second_primary_stream(int32_t dev, size_t size) {
-        return resize_array(dev, devices[dev].second_primary, size, 20);
+        return resize_array(dev, devices[dev].second_primary, size, PRIMARY_SIZE);
     }
 
     anydsl::Array<float>& gpu_secondary_stream(int32_t dev, size_t size) {
-        return resize_array(dev, devices[dev].secondary, size, 13);
+        return resize_array(dev, devices[dev].secondary, size, SECONDARY_SIZE);
     }
 
     anydsl::Array<int32_t>& gpu_tmp_buffer(int32_t dev, size_t size) {
@@ -526,39 +531,45 @@ void clear_pixels() {
 }
 
 inline void get_ray_stream(RayStream& rays, float* ptr, size_t capacity) {
-    rays.id = (int*)ptr + 0 * capacity;
-    rays.org_x = ptr + 1 * capacity;
-    rays.org_y = ptr + 2 * capacity;
-    rays.org_z = ptr + 3 * capacity;
-    rays.dir_x = ptr + 4 * capacity;
-    rays.dir_y = ptr + 5 * capacity;
-    rays.dir_z = ptr + 6 * capacity;
-    rays.tmin  = ptr + 7 * capacity;
-    rays.tmax  = ptr + 8 * capacity;
+    rays.id         = (int*)ptr + 0 * capacity;
+    rays.org_x      = ptr + 1 * capacity;
+    rays.org_y      = ptr + 2 * capacity;
+    rays.org_z      = ptr + 3 * capacity;
+    rays.dir_x      = ptr + 4 * capacity;
+    rays.dir_y      = ptr + 5 * capacity;
+    rays.dir_z      = ptr + 6 * capacity;
+    rays.wvl_hero   = ptr + 7 * capacity;
+    rays.wvl_s1     = ptr + 8 * capacity;
+    rays.wvl_s2     = ptr + 9 * capacity;
+    rays.wvl_s3     = ptr + 10 * capacity;
+    rays.tmin       = ptr + 11 * capacity;
+    rays.tmax       = ptr + 12 * capacity;
 }
 
 inline void get_primary_stream(PrimaryStream& primary, float* ptr, size_t capacity) {
     get_ray_stream(primary.rays, ptr, capacity);
-    primary.geom_id   = (int*)ptr + 9 * capacity;
-    primary.prim_id   = (int*)ptr + 10 * capacity;
-    primary.t         = ptr + 11 * capacity;
-    primary.u         = ptr + 12 * capacity;
-    primary.v         = ptr + 13 * capacity;
-    primary.rnd       = (unsigned int*)ptr + 14 * capacity;
-    primary.mis       = ptr + 15 * capacity;
-    primary.contrib_r = ptr + 16 * capacity;
-    primary.contrib_g = ptr + 17 * capacity;
-    primary.contrib_b = ptr + 18 * capacity;
-    primary.depth     = (int*)ptr + 19 * capacity;
+    primary.geom_id   = (int*)ptr + (RAY_STREAM_SIZE+0) * capacity;
+    primary.prim_id   = (int*)ptr + (RAY_STREAM_SIZE+1) * capacity;
+    primary.t         = ptr + (RAY_STREAM_SIZE+2) * capacity;
+    primary.u         = ptr + (RAY_STREAM_SIZE+3) * capacity;
+    primary.v         = ptr + (RAY_STREAM_SIZE+4) * capacity;
+    primary.rnd       = (unsigned int*)ptr + (RAY_STREAM_SIZE+5) * capacity;
+    primary.mis       = ptr + (RAY_STREAM_SIZE+6) * capacity;
+    primary.contrib_hero = ptr + (RAY_STREAM_SIZE+7) * capacity;
+    primary.contrib_s1 = ptr + (RAY_STREAM_SIZE+8) * capacity;
+    primary.contrib_s2 = ptr + (RAY_STREAM_SIZE+9) * capacity;
+    primary.contrib_s3 = ptr + (RAY_STREAM_SIZE+10) * capacity;
+    primary.depth     = (int*)ptr + (RAY_STREAM_SIZE+11) * capacity;
     primary.size = 0;
 }
 
 inline void get_secondary_stream(SecondaryStream& secondary, float* ptr, size_t capacity) {
     get_ray_stream(secondary.rays, ptr, capacity);
-    secondary.prim_id = (int*)ptr + 9 * capacity;
-    secondary.color_r = ptr + 10 * capacity;
-    secondary.color_g = ptr + 11 * capacity;
-    secondary.color_b = ptr + 12 * capacity;
+    secondary.prim_id = (int*)ptr + (RAY_STREAM_SIZE+0) * capacity;
+    secondary.color_hero = ptr + (RAY_STREAM_SIZE+1) * capacity;
+    secondary.color_s1 = ptr + (RAY_STREAM_SIZE+2) * capacity;
+    secondary.color_s2 = ptr + (RAY_STREAM_SIZE+3) * capacity;
+    secondary.color_s3 = ptr + (RAY_STREAM_SIZE+4) * capacity;
     secondary.size = 0;
 }
 
@@ -620,12 +631,12 @@ void rodent_load_bvh8_tri4(int32_t dev, const char* file, Node8** nodes, Tri4** 
 
 void rodent_cpu_get_primary_stream(PrimaryStream* primary, int32_t size) {
     auto& array = interface->cpu_primary_stream(size);
-    get_primary_stream(*primary, array.data(), array.size() / 20);
+    get_primary_stream(*primary, array.data(), array.size() / PRIMARY_SIZE);
 }
 
 void rodent_cpu_get_secondary_stream(SecondaryStream* secondary, int32_t size) {
     auto& array = interface->cpu_secondary_stream(size);
-    get_secondary_stream(*secondary, array.data(), array.size() / 13);
+    get_secondary_stream(*secondary, array.data(), array.size() / SECONDARY_SIZE);
 }
 
 void rodent_gpu_get_tmp_buffer(int32_t dev, int32_t** buf, int32_t size) {
@@ -634,17 +645,17 @@ void rodent_gpu_get_tmp_buffer(int32_t dev, int32_t** buf, int32_t size) {
 
 void rodent_gpu_get_first_primary_stream(int32_t dev, PrimaryStream* primary, int32_t size) {
     auto& array = interface->gpu_first_primary_stream(dev, size);
-    get_primary_stream(*primary, array.data(), array.size() / 20);
+    get_primary_stream(*primary, array.data(), array.size() / PRIMARY_SIZE);
 }
 
 void rodent_gpu_get_second_primary_stream(int32_t dev, PrimaryStream* primary, int32_t size) {
     auto& array = interface->gpu_second_primary_stream(dev, size);
-    get_primary_stream(*primary, array.data(), array.size() / 20);
+    get_primary_stream(*primary, array.data(), array.size() / PRIMARY_SIZE);
 }
 
 void rodent_gpu_get_secondary_stream(int32_t dev, SecondaryStream* secondary, int32_t size) {
     auto& array = interface->gpu_secondary_stream(dev, size);
-    get_secondary_stream(*secondary, array.data(), array.size() / 13);
+    get_secondary_stream(*secondary, array.data(), array.size() / SECONDARY_SIZE);
 }
 
 #ifdef ENABLE_EMBREE_DEVICE
