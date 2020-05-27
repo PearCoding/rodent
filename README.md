@@ -9,12 +9,12 @@ This fork is an experimental extension of the original Rodent with spectral rayt
 
 The spectral raytracing is achieved with Hero Wavelength spectral sampling:
 
-A. Wilkie, S. Nawaz, M. Droske, A. Weidlich, and J. Hanika. 2014. Hero wavelength spectral sampling. In Proceedings of the 25th Eurographics Symposium on Rendering (EGSR ’14). Eurographics Association, Goslar, DEU, 123–131. DOI:https://doi.org/10.1111/cgf.12419
+    A. Wilkie, S. Nawaz, M. Droske, A. Weidlich, and J. Hanika. 2014. Hero wavelength spectral sampling. In Proceedings of the 25th Eurographics Symposium on Rendering (EGSR ’14). Eurographics Association, Goslar, DEU, 123–131. DOI:https://doi.org/10.1111/cgf.12419
 
 
 Upsampling of existent sRGB data is done with A Low-Dimensional Function Space for Efficient Spectral Upsampling:
 
-Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling. In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
+    Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling. In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
 
 # Building
 
