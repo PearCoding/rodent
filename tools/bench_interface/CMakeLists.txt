@@ -1,14 +1,6 @@
 set(INTERFACE_SRCS
     bench_interface.impala
-    ../../src/render/material.impala
-    ../../src/render/light.impala
-    ../../src/render/image.impala
-    ../../src/core/common.impala
-    ../../src/core/color.impala
-    ../../src/core/random.impala
-    ../../src/core/matrix.impala
-    ../../src/core/spectral.impala
-    ../../src/core/vector.impala)
+    ${IMPALA_FILES})
 
 anydsl_runtime_wrap(INTERFACE_OBJS
     NAME "bench_interface"
@@ -20,5 +12,5 @@ add_executable(bench_interface
     ${INTERFACE_OBJS}
     bench_interface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../common/interface.h)
-target_include_directories(bench_interface PUBLIC ../common ../../src/driver)
-target_link_libraries(bench_interface ${AnyDSL_runtime_LIBRARIES})
+target_include_directories(bench_interface PUBLIC ../common)
+target_link_libraries(bench_interface rodent_runtime ${AnyDSL_runtime_LIBRARIES})

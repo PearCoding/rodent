@@ -21,30 +21,33 @@ if (NOT TARGET_DEVICE STREQUAL "")
 endif()
 
 set(RODENT_SRCS
-    core/color.impala
-    core/common.impala
-    core/cpu_common.impala
-    core/illumination.impala
-    core/matrix.impala
-    core/random.impala
-    core/sort.impala
-    core/spectral.impala
-    core/vector.impala
-    render/image.impala
-    render/camera.impala
-    render/geometry.impala
-    render/light.impala
-    render/material.impala
-    render/renderer.impala
-    render/scene.impala
-    render/driver.impala
-    render/mapping_cpu.impala
-    render/mapping_gpu.impala
-    render/tonemapper.impala
-    traversal/intersection.impala
-    traversal/stack.impala
-    traversal/mapping_cpu.impala
-    traversal/mapping_gpu.impala)
+    impala/core/color.impala
+    impala/core/common.impala
+    impala/core/cpu_common.impala
+    impala/core/illumination.impala
+    impala/core/matrix.impala
+    impala/core/random.impala
+    impala/core/sort.impala
+    impala/core/spectral.impala
+    impala/core/vector.impala
+    impala/render/image.impala
+    impala/render/camera.impala
+    impala/render/geometry.impala
+    impala/render/light.impala
+    impala/render/material.impala
+    impala/render/renderer.impala
+    impala/render/scene.impala
+    impala/render/driver.impala
+    impala/render/mapping_cpu.impala
+    impala/render/mapping_gpu.impala
+    impala/render/tonemapper.impala
+    impala/traversal/intersection.impala
+    impala/traversal/stack.impala
+    impala/traversal/mapping_cpu.impala
+    impala/traversal/mapping_gpu.impala)
+
+list(TRANSFORM RODENT_SRCS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABLE IMPALA_FILES)
+set(IMPALA_FILES ${IMPALA_FILES} PARENT_SCOPE)
 
 set(DRIVER_SRCS
     driver/driver.cpp
@@ -84,7 +87,7 @@ anydsl_runtime_wrap(RODENT_OBJS
 
 anydsl_runtime_wrap(DISCARD_TMP_OBJS
     NAME "interface"
-    FILES ${RODENT_SRCS} dummy_main.impala
+    FILES ${RODENT_SRCS} impala/dummy_main.impala
     INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/driver/interface)
 
 if (NOT DISABLE_GUI)

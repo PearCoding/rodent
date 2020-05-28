@@ -64,6 +64,14 @@ fn gpu_iterate(n: i32, body: fn (i32) -> ()) -> () {
     acc.sync();
 }
 
+fn @make_color_spectrum(color: Color) -> Spectrum {
+    make_spectrum(@|wvl| {
+            if wvl == 0.0f {color.r} else {
+                if wvl == 1.0f { color.g } else { color.b }
+            }
+        })
+}
+
 extern fn @(opt) lookup_tex(opt: bool, tex: Tex, mut uv: Vec2) -> Color {
     if tex.border == border_clamp {
         let border = make_clamp_border();
@@ -79,13 +87,16 @@ extern fn @(opt) lookup_tex(opt: bool, tex: Tex, mut uv: Vec2) -> Color {
             return(tex.border_color)
         }
     }
-    let image = make_image(|x, y| tex.pixels(x + y * tex.width), tex.width, tex.height);
+
+    let image = make_image(|x, y| make_color_spectrum(tex.pixels(x + y * tex.width)), tex.width, tex.height);
     if tex.sampler == sampler_nearest {
         let filter = make_nearest_filter();
-        filter(math, image, uv)
+        let k = filter(math, image, uv);
+        make_color(k.value(0.0f), k.value(1.0f), k.value(2.0f))
     } else /* if tex.sampler == sampler_bilinear */ {
         let filter = make_bilinear_filter();
-        filter(math, image, uv)
+        let k = filter(math, image, uv);
+        make_color(k.value(0.0f), k.value(1.0f), k.value(2.0f))
     }
 }
 
@@ -130,8 +141,11 @@ extern fn @(opt) shade(opt: bool, input: ShaderInput, in_dir: Vec3, out_dir: Vec
         attr:        @ |_| make_vec4(0.0f, 0.0f, 0.0f, 0.0f),
         local:       input.local
     };
-    let bsdf = make_diffuse_bsdf(math, surf, input.kd);
-    bsdf.eval(in_dir, out_dir)
+    let bsdf = make_diffuse_bsdf(math, surf, make_color_spectrum(input.kd));
+    let spec_r = bsdf.eval(in_dir, out_dir, make_spectral_wavelength(0.0f, 0.0f, 0.0f, 0.0f));
+    let spec_g = bsdf.eval(in_dir, out_dir, make_spectral_wavelength(1.0f, 1.0f, 1.0f, 1.0f));
+    let spec_b = bsdf.eval(in_dir, out_dir, make_spectral_wavelength(2.0f, 2.0f, 2.0f, 2.0f));
+    make_color(spec_r.hero, spec_g.hero, spec_b.hero)
 }
 
 extern fn bench_interface(mesh_ptr: &ShadedMesh, tri_hits: &[TriHit], in_dirs: &[Vec3], out_dirs: &[Vec3], colors: &mut [Color], n: i32) -> () {

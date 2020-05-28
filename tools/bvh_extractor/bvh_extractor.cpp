@@ -3,9 +3,9 @@
 #include <vector>
 #include <cstring>
 
-#include "driver/obj.h"
-#include "driver/file_path.h"
-#include "driver/bvh.h"
+#include "runtime/obj.h"
+#include "runtime/file_path.h"
+#include "runtime/bvh.h"
 
 #ifdef ENABLE_EMBREE_BVH
 size_t build_bvh8(std::ofstream&, const obj::TriMesh&);

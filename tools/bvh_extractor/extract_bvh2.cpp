@@ -1,8 +1,8 @@
 #include <fstream>
 
 #include "traversal.h"
-#include "driver/bvh.h"
-#include "driver/obj.h"
+#include "runtime/bvh.h"
+#include "runtime/obj.h"
 
 class Bvh2Builder {
 public:

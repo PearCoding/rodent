@@ -12,8 +12,8 @@
 
 #include <anydsl_runtime.hpp>
 
-#include "float2.h"
-#include "float3.h"
+#include "runtime/float2.h"
+#include "runtime/float3.h"
 #include "shading.h"
 
 int64_t clock_us() {

@@ -3,8 +3,8 @@
 
 #include "traversal.h"
 #include "load_bvh.h"
-#include "driver/embree_bvh.h"
-#include "driver/obj.h"
+#include "runtime/embree_bvh.h"
+#include "runtime/obj.h"
 
 template <size_t N, typename BvhNode, typename BvhTri>
 void write_embree_bvh(std::ofstream& out, const std::vector<BvhNode>& nodes, const std::vector<BvhTri>& tris) {

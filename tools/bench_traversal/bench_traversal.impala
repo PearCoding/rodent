@@ -71,6 +71,7 @@ fn @make_gpu_ray1(rays: &[Ray1]) -> fn (i32, i32) -> Ray {
         let ray1 = ray_ptr(1);
         make_ray(make_vec3(ray0(0), ray0(1), ray0(2)),
                  make_vec3(ray1(0), ray1(1), ray1(2)),
+                 make_spectral_wavelength(0.0f, 0.0f, 0.0f, 0.0f),
                  ray0(3), ray1(3))
     }
 }
@@ -88,6 +89,7 @@ fn @make_cpu_ray1(rays: &[Ray1]) -> fn (i32, i32) -> Ray {
         make_ray(
             make_vec3(ray_ptr.org(0), ray_ptr.org(1), ray_ptr.org(2)),
             make_vec3(ray_ptr.dir(0), ray_ptr.dir(1), ray_ptr.dir(2)),
+            make_spectral_wavelength(0.0f, 0.0f, 0.0f, 0.0f),
             ray_ptr.tmin,
             ray_ptr.tmax
         )
@@ -100,6 +102,7 @@ fn @make_cpu_ray4(rays: &[Ray4]) -> fn (i32, i32) -> Ray {
         make_ray(
             make_vec3(ray_ptr.org(0)(j), ray_ptr.org(1)(j), ray_ptr.org(2)(j)),
             make_vec3(ray_ptr.dir(0)(j), ray_ptr.dir(1)(j), ray_ptr.dir(2)(j)),
+            make_spectral_wavelength(0.0f, 0.0f, 0.0f, 0.0f),
             ray_ptr.tmin(j),
             ray_ptr.tmax(j)
         )
@@ -112,6 +115,7 @@ fn @make_cpu_ray8(rays: &[Ray8]) -> fn (i32, i32) -> Ray {
         make_ray(
             make_vec3(ray_ptr.org(0)(j), ray_ptr.org(1)(j), ray_ptr.org(2)(j)),
             make_vec3(ray_ptr.dir(0)(j), ray_ptr.dir(1)(j), ray_ptr.dir(2)(j)),
+            make_spectral_wavelength(0.0f, 0.0f, 0.0f, 0.0f),
             ray_ptr.tmin(j),
             ray_ptr.tmax(j)
         )

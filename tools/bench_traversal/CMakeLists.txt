@@ -1,15 +1,6 @@
 set(TRAVERSAL_SRCS
     bench_traversal.impala
-    ../../src/traversal/intersection.impala
-    ../../src/traversal/stack.impala
-    ../../src/traversal/mapping_cpu.impala
-    ../../src/traversal/mapping_gpu.impala
-    ../../src/core/common.impala
-    ../../src/core/cpu_common.impala
-    ../../src/core/sort.impala
-    ../../src/core/matrix.impala
-    ../../src/core/spectral.impala
-    ../../src/core/vector.impala)
+    ${IMPALA_FILES})
 
 anydsl_runtime_wrap(TRAVERSAL_OBJS
     NAME "bench_traversal"
