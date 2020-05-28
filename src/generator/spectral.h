@@ -10,6 +10,11 @@ public:
 
 	void prepare(const float* r, const float* g, const float* b, float* out_a, float* out_b, float* out_c, size_t elems);
 
+	// slice is the next amount of floats to next element of the channel
+	void prepare(const float* r, size_t r_slice, const float* g, size_t g_slice, const float* b, size_t b_slice,
+				float* out_a, size_t oa_slice, float* out_b, size_t ob_slice, float* out_c, size_t oc_slice, 
+				size_t elems);
+
 	inline static void compute(const float* a, const float* b, const float* c, const float* wavelengths, float* out_weights, size_t elems)
 	{
 		for (size_t i = 0; i < elems; ++i) {

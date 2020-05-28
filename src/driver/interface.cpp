@@ -11,10 +11,10 @@
 #endif
 
 #include "interface.h"
-#include "bvh.h"
-#include "obj.h"
-#include "image.h"
-#include "buffer.h"
+#include "runtime/bvh.h"
+#include "runtime/obj.h"
+#include "runtime/image.h"
+#include "runtime/buffer.h"
 
 template <typename Node, typename Tri>
 struct Bvh {
@@ -324,7 +324,7 @@ struct EmbreeDevice {
 #endif
 
 struct Interface {
-    using DeviceImage = std::tuple<anydsl::Array<uint8_t>, int32_t, int32_t>;
+    using DeviceImage = std::tuple<anydsl::Array<float>, int32_t, int32_t>;
 
     struct DeviceData {
         std::unordered_map<std::string, Bvh2Tri1> bvh2_tri1;
@@ -472,28 +472,17 @@ struct Interface {
         return buffers[filename] = std::move(copy_to_device(dev, vector));
     }
 
-    const DeviceImage& load_png(int32_t dev, const std::string& filename) {
+    const DeviceImage& load_img(int32_t dev, const std::string& filename) {
         auto& images = devices[dev].images;
         auto it = images.find(filename);
         if (it != images.end())
             return it->second;
         ImageRgba32 img;
-        if (!::load_png(filename, img))
-            error("Cannot load PNG file '", filename, "'");
-        info("Loaded PNG file '", filename, "'");
-        return images[filename] = std::move(copy_to_device(dev, img));
-    }
-
-    const DeviceImage& load_jpg(int32_t dev, const std::string& filename) {
-        auto& images = devices[dev].images;
-        auto it = images.find(filename);
-        if (it != images.end())
-            return it->second;
-        ImageRgba32 img;
-        if (!::load_jpg(filename, img))
-            error("Cannot load JPG file '", filename, "'");
-        info("Loaded JPG file '", filename, "'");
-        return images[filename] = std::move(copy_to_device(dev, img));
+        if (!::load_exr(filename, img))
+            error("Cannot load EXR file '", filename, "'");
+        info("Loaded EXR file '", filename, "'");
+        images[filename] = std::move(copy_to_device(dev, img));
+        return images[filename];
     }
 
     void present(int32_t dev) {
@@ -592,16 +581,9 @@ void rodent_get_film_data(int32_t dev, float** pixels, int32_t* width, int32_t* 
     *height = interface->film_height;
 }
 
-void rodent_load_png(int32_t dev, const char* file, uint8_t** pixels, int32_t* width, int32_t* height) {
-    auto& img = interface->load_png(dev, file);
-    *pixels = const_cast<uint8_t*>(std::get<0>(img).data());
-    *width  = std::get<1>(img);
-    *height = std::get<2>(img);
-}
-
-void rodent_load_jpg(int32_t dev, const char* file, uint8_t** pixels, int32_t* width, int32_t* height) {
-    auto& img = interface->load_jpg(dev, file);
-    *pixels = const_cast<uint8_t*>(std::get<0>(img).data());
+void rodent_load_img(int32_t dev, const char* file, float** pixels, int32_t* width, int32_t* height) {
+    auto& img = interface->load_img(dev, file);
+    *pixels = const_cast<float*>(std::get<0>(img).data());
     *width  = std::get<1>(img);
     *height = std::get<2>(img);
 }

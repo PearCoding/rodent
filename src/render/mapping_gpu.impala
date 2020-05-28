@@ -490,7 +490,7 @@ fn @make_gpu_device( dev_id: i32
                    , intrinsics: Intrinsics
                    , min_max: MinMax
                    , load_bvh: fn (&[u8]) -> Bvh
-                   , read_pixel: fn (&[u32], i32) -> u32
+                   , read_pixel: fn (&[f32], i32) -> f32
                    , make_buffer: fn (&[i8]) -> DeviceBuffer
                    , atomics: Atomics
                    , streaming: bool
@@ -527,21 +527,13 @@ fn @make_gpu_device( dev_id: i32
         present: @ || rodent_present(dev_id),
         load_buffer: @ |filename| make_buffer(rodent_load_buffer(dev_id, filename)),
         load_bvh: load_bvh,
-        load_png: @ |filename| {
+        load_img: @ |filename| {
             let mut pixel_data;
             let mut width;
             let mut height;
-            rodent_load_png(dev_id, filename, &mut pixel_data, &mut width, &mut height);
-            let (ptr, stride) = (pixel_data, width);
-            make_image_rgba32(@ |x, y| read_pixel(ptr as &[u32], y * stride + x), width, height)
-        },
-        load_jpg: @ |filename| {
-            let mut pixel_data;
-            let mut width;
-            let mut height;
-            rodent_load_jpg(dev_id, filename, &mut pixel_data, &mut width, &mut height);
-            let (ptr, stride) = (pixel_data, width);
-            make_image_rgba32(@ |x, y| read_pixel(ptr as &[u32], y * stride + x), width, height)
+            rodent_load_img(dev_id, filename, &mut pixel_data, &mut width, &mut height);
+            let (ptr, stride_x, stride_c) = (pixel_data, width*4, 4);
+            make_image_rgba32(intrinsics,  @ |x, y, c| read_pixel(ptr as &[f32], y * stride_x + x * stride_c + c), width, height)
         }
     }
 }
@@ -554,7 +546,7 @@ fn @make_nvvm_device(dev: i32, streaming: bool) -> Device {
         rodent_load_bvh2_tri1(dev_id, filename, &mut nodes, &mut tris);
         make_gpu_bvh2_tri1(nodes, tris, true)
     };
-    let read_pixel = @ |p, i| bitcast[u32](nvvm_ldg_i32(&p(i) as &[1]i32));
+    let read_pixel = @ |p, i| nvvm_ldg_f32(&p(i) as &[1]f32);
     let make_buffer = @ |p| {
         DeviceBuffer {
             load_f32:  @ |i| nvvm_ldg_f32(&((p as &[1][f32])(i))),

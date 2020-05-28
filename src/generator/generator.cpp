@@ -5,13 +5,14 @@
 #include <cstring>
 #include <limits>
 
-#include "bvh.h"
+#include "runtime/bvh.h"
 #ifdef ENABLE_EMBREE_BVH
-#include "embree_bvh.h"
+#include "runtime/embree_bvh.h"
 #endif
-#include "interface.h"
-#include "obj.h"
-#include "buffer.h"
+#include "driver/interface.h"
+#include "runtime/obj.h"
+#include "runtime/buffer.h"
+#include "runtime/image.h"
 #include "spectral.h"
 
 #ifdef WIN32
@@ -70,23 +71,6 @@ inline Target cpuid()
     if (detected.count("asimd"))
         return Target::ASIMD;
     return Target::GENERIC;
-}
-
-void copy_file(const std::string &src, const std::string &dst)
-{
-    for (size_t i = 0; i < dst.size();)
-    {
-        auto j = dst.find_first_of("/\\", i);
-        if (j == std::string::npos)
-            break;
-        create_directory(dst.substr(0, j).c_str());
-        i = j + 1;
-    }
-    info("Copying '", src, "' to '", dst, "'");
-    std::ifstream is(src, std::ios::binary);
-    std::ofstream os(dst, std::ios::binary);
-    assert(is && os);
-    os << is.rdbuf();
 }
 
 inline std::string make_id(const std::string &str)
@@ -539,6 +523,30 @@ static rgb upsample_rgb(const rgb &c)
     return v;
 }
 
+static std::string convert_image(const FilePath& path) {
+    ImageRgba32 data;
+    const auto ext = path.extension();
+    
+    if(ext =="png")
+        load_png(path, data);
+    else if(ext == "jpg" || ext == "jpeg")
+        load_jpg(path, data);
+    else if(ext == "exr")
+        load_exr(path, data);
+    else {
+        error("Unknown file type '", path.path(), "'");
+        return "";
+    }
+
+    sSpectralUpsampler->prepare(&data.pixels[0], 4, &data.pixels[1], 4, &data.pixels[2], 4,
+                                &data.pixels[0], 4, &data.pixels[1], 4, &data.pixels[2], 4,
+                                data.width*data.height);
+
+    std::string new_path = "data/textures/"+path.remove_extension()+".exr";
+    save_exr(FilePath(new_path), data);
+    return new_path;
+}
+
 static size_t cleanup_obj(obj::File &obj_file, obj::MaterialLib &mtl_lib)
 {
     // Create a dummy material
@@ -881,26 +889,14 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
         info("Reusing existing BVH for '", file_name, "'");
     }
 
-    // Generate images (TODO)
-    info("Generating images for '", file_name, "' [TODO]");
-    /*os << "\n    // Images\n"
-       << "    let dummy_image = make_image(@ |x, y| make_spectral_weight_zero(), 1, 1);\n";
+    // Generate images
+    info("Generating images for '", file_name, "'");
+    os << "\n    // Images\n";
     for (size_t i = 0; i < images.size(); i++) {
         auto name = fix_file(image_names[i]);
-        copy_file(path.base_name() + "/" + name, "data/" + name);
-        os << "    let image_" << make_id(name) << " = ";
-        if (ends_with(name, ".png")) {
-            os << "device.load_png(\"data/" << name << "\");\n";
-        } else if (ends_with(name, ".tga")) {
-            os << "device.load_tga(\"data/" << name << "\");\n";
-        } else if (ends_with(name, ".tiff")) {
-            os << "device.load_tga(\"data/" << name << "\");\n";
-        } else if (ends_with(name, ".jpeg") || ends_with(name, ".jpg")) {
-            os << "device.load_jpg(\"data/" << name << "\");\n";
-        } else {
-            os << "dummy_image; // Cannot determine image type for " << name << "\n";
-        }
-    }*/
+        auto c_name = convert_image(path.base_name() + "/" + name);
+        os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name << "\");\n";
+    }
 
     // Lights
     std::vector<int> light_ids(tri_mesh.indices.size() / 4, 0);

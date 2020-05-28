@@ -9,14 +9,14 @@ set(SPP "4" CACHE STRING "Samples per pixel")
 if (SCENE_FILE STREQUAL "")
     message(FATAL_ERROR "Please specify a valid OBJ scene in the SCENE_FILE variable")
 endif()
-set(CONVERTER_OPTIONS "")
+set(GENERATOR_OPTIONS "")
 if (NOT TARGET_PLATFORM STREQUAL "")
-    set(CONVERTER_OPTIONS "--target" "${TARGET_PLATFORM}")
+    set(GENERATOR_OPTIONS "--target" "${TARGET_PLATFORM}")
 endif()
 if (NOT TARGET_DEVICE STREQUAL "")
-    set(CONVERTER_OPTIONS ${CONVERTER_OPTIONS} "--device" "${TARGET_DEVICE}")
+    set(GENERATOR_OPTIONS ${GENERATOR_OPTIONS} "--device" "${TARGET_DEVICE}")
     if (MEGAKERNEL_FUSION AND (TARGET_PLATFORM STREQUAL "nvvm-megakernel" OR TARGET_PLATFORM STREQUAL "amdgpu-megakernel"))
-        set(CONVERTER_OPTIONS ${CONVERTER_OPTIONS} "--fusion")
+        set(GENERATOR_OPTIONS ${GENERATOR_OPTIONS} "--fusion")
     endif()
 endif()
 
@@ -49,30 +49,32 @@ set(RODENT_SRCS
 set(DRIVER_SRCS
     driver/driver.cpp
     driver/interface.cpp
-    driver/interface.h
-    driver/obj.cpp
-    driver/obj.h
-    driver/image.cpp
-    driver/image.h
-    driver/bvh.h
-    driver/float2.h
-    driver/float3.h
-    driver/float4.h
-    driver/file_path.h
-    driver/common.h
-    driver/color.h
-    driver/spectral.h
-    driver/spectral.cpp)
+    driver/interface.h)
 
-set(CONVERTER_SRCS
-    driver/converter.cpp
-    driver/obj.cpp
-    driver/obj.h
-    driver/file_path.h
-    driver/interface.h
-    driver/bvh.h
-    driver/spectral.h
-    driver/spectral.cpp)
+set(GENERATOR_SRCS
+    generator/generator.cpp
+    generator/spectral.h
+    generator/spectral.cpp)
+
+set(RUNTIME_SRCS
+    runtime/obj.cpp
+    runtime/obj.h
+    runtime/file_path.h
+    runtime/image_exr.cpp
+    runtime/image_jpg.cpp
+    runtime/image_png.cpp
+    runtime/image_utils.cpp
+    runtime/image.h
+    runtime/bvh.h
+    runtime/common.h
+    runtime/color.h
+    runtime/float2.h
+    runtime/float3.h
+    runtime/float4.h
+    runtime/tri.h
+    runtime/bbox.h
+    runtime/buffer.h
+)
 
 anydsl_runtime_wrap(RODENT_OBJS
     NAME "rodent"
@@ -93,56 +95,62 @@ find_package(JPEG REQUIRED)
 find_package(TBB REQUIRED)
 find_package(LZ4 REQUIRED)
 
-add_executable(converter ${CONVERTER_SRCS})
-target_include_directories(converter PUBLIC ${LZ4_INCLUDE_DIR})
-target_link_libraries(converter ${LZ4_LIBRARY})
-target_compile_definitions(converter PUBLIC -DCPUINFO_PATH="${CPUINFO_PATH}")
+add_library(rodent_runtime STATIC ${RUNTIME_SRCS})
+target_include_directories(rodent_runtime PUBLIC ${LZ4_INCLUDE_DIR} $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_include_directories(rodent_runtime PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/external/tinyexr>)
+target_link_libraries(rodent_runtime PUBLIC ${LZ4_LIBRARY} ${PNG_LIBRARIES} ${JPEG_LIBRARIES})
+
+add_executable(rodent_generator ${GENERATOR_SRCS})
+target_include_directories(rodent_generator PUBLIC ${LZ4_INCLUDE_DIR} $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_link_libraries(rodent_generator PUBLIC rodent_runtime)
+target_compile_definitions(rodent_generator PUBLIC -DCPUINFO_PATH="${CPUINFO_PATH}")
 if (COLORIZE)
-    target_compile_definitions(converter PUBLIC -DCOLORIZE)
+    target_compile_definitions(rodent_generator PUBLIC -DCOLORIZE)
 endif()
 if (EMBREE_FOUND)
-    target_include_directories(converter PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR})
-    target_link_libraries(converter ${EMBREE_DEPENDENCIES})
-    target_compile_definitions(converter PUBLIC ${EMBREE_DEFINITIONS} -DENABLE_EMBREE_BVH)
+    target_include_directories(rodent_generator PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR})
+    target_link_libraries(rodent_generator ${EMBREE_DEPENDENCIES})
+    target_compile_definitions(rodent_generator PUBLIC ${EMBREE_DEFINITIONS} -DENABLE_EMBREE_BVH)
 endif()
 
 # Add simple (possible) dependency to the material file
 string(REGEX REPLACE "[.]obj$" ".mtl" SCENE_FILE_MTL ${SCENE_FILE})
-set(CONVERTER_DEPENDENCIES ${SCENE_FILE})
+set(GENERATOR_DEPENDENCIES ${SCENE_FILE})
 if(EXISTS ${SCENE_FILE_MTL})
-    list(APPEND CONVERTER_DEPENDENCIES ${SCENE_FILE_MTL})
+    list(APPEND GENERATOR_DEPENDENCIES ${SCENE_FILE_MTL})
 endif()
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/main.impala
     COMMAND ${CMAKE_COMMAND} -E copy ../tools/upsampler/srgb.coeff ${CMAKE_BINARY_DIR}/srgb.coeff 
-    COMMAND converter ${SCENE_FILE} ${CONVERTER_OPTIONS} --max-path-len ${MAX_PATH_LEN} --samples-per-pixel ${SPP}
+    COMMAND rodent_generator ${SCENE_FILE} ${GENERATOR_OPTIONS} --max-path-len ${MAX_PATH_LEN} --samples-per-pixel ${SPP}
     COMMAND ${CMAKE_COMMAND} -E rename ${CMAKE_BINARY_DIR}/main.impala ${CMAKE_CURRENT_BINARY_DIR}/main.impala
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    DEPENDS ${CONVERTER_DEPENDENCIES} converter)
+    DEPENDS ${GENERATOR_DEPENDENCIES} rodent_generator)
 
 add_custom_target(convert DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/main.impala)
 
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/main.impala PROPERTIES GENERATED TRUE)
 
-add_library(driver ${DRIVER_SRCS})
-target_include_directories(driver PUBLIC ${LZ4_INCLUDE_DIR})
+add_library(rodent_driver STATIC ${DRIVER_SRCS})
+target_link_libraries(rodent_driver PUBLIC rodent_runtime)
+target_include_directories(rodent_driver PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 if (EMBREE_FOUND)
-    target_include_directories(driver PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${LZ4_INCLUDE_DIR})
-    target_link_libraries(driver ${EMBREE_DEPENDENCIES})
-    target_compile_definitions(driver PUBLIC -DENABLE_EMBREE_DEVICE)
+    target_include_directories(rodent_driver PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${LZ4_INCLUDE_DIR})
+    target_link_libraries(rodent_driver PUBLIC ${EMBREE_DEPENDENCIES})
+    target_compile_definitions(rodent_driver PUBLIC -DENABLE_EMBREE_DEVICE)
 endif()
 if (NOT DISABLE_GUI)
-    target_include_directories(driver PUBLIC ${SDL2_INCLUDE_DIR})
-    target_link_libraries(driver ${SDL2_LIBRARY})
+    target_include_directories(rodent_driver PUBLIC ${SDL2_INCLUDE_DIR})
+    target_link_libraries(rodent_driver PUBLIC ${SDL2_LIBRARY})
 else()
-    target_compile_definitions(driver PUBLIC -DDISABLE_GUI)
+    target_compile_definitions(rodent_driver PUBLIC -DDISABLE_GUI)
 endif()
 if (COLORIZE)
-    target_compile_definitions(driver PUBLIC -DCOLORIZE)
+    target_compile_definitions(rodent_driver PUBLIC -DCOLORIZE)
 endif()
 
 add_executable(rodent ${RODENT_OBJS})
-target_link_libraries(rodent driver ${AnyDSL_runtime_LIBRARIES} ${PNG_LIBRARIES} ${JPEG_LIBRARIES} ${TBB_LIBRARIES} ${LZ4_LIBRARY})
+target_link_libraries(rodent PUBLIC rodent_driver ${AnyDSL_runtime_LIBRARIES} ${TBB_LIBRARIES})
 
 if (SCENE_FILE STREQUAL "${PROJECT_SOURCE_DIR}/testing/cornell_box.obj")
     # Test rodent when the cornell box is used

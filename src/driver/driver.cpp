@@ -20,10 +20,10 @@
 #endif
 
 #include "interface.h"
-#include "float3.h"
-#include "common.h"
-#include "image.h"
-#include "color.h"
+#include "runtime/float3.h"
+#include "runtime/common.h"
+#include "runtime/image.h"
+#include "runtime/color.h"
 
 #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
 #include <x86intrin.h>
@@ -254,7 +254,7 @@ static void save_image(const std::string& out_file, size_t width, size_t height,
     ImageRgba32 img;
     img.width = width;
     img.height = height;
-    img.pixels.reset(new uint8_t[width * height * 4]);
+    img.pixels.reset(new float[width * height * 4]);
 
     auto film = get_pixels();
     auto inv_iter = 1.0f / iter;
@@ -265,15 +265,15 @@ static void save_image(const std::string& out_file, size_t width, size_t height,
             auto g = film[(y * width + x) * 3 + 1];
             auto b = film[(y * width + x) * 3 + 2];
 
-            img.pixels[4 * (y * width + x) + 0] = clamp(std::pow(r * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f;
-            img.pixels[4 * (y * width + x) + 1] = clamp(std::pow(g * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f;
-            img.pixels[4 * (y * width + x) + 2] = clamp(std::pow(b * inv_iter, inv_gamma), 0.0f, 1.0f) * 255.0f;
-            img.pixels[4 * (y * width + x) + 3] = 255;
+            img.pixels[4 * (y * width + x) + 0] = r * inv_iter;
+            img.pixels[4 * (y * width + x) + 1] = g * inv_iter;
+            img.pixels[4 * (y * width + x) + 2] = b * inv_iter;
+            img.pixels[4 * (y * width + x) + 3] = 1.0f;
         }
     }
 
-    if (!save_png(out_file, img))
-        error("Failed to save PNG file '", out_file, "'");
+    if (!save_exr(out_file, img))
+        error("Failed to save EXR file '", out_file, "'");
 }
 
 static inline void check_arg(int argc, char** argv, int arg, int n) {

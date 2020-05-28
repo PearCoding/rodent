@@ -1,9 +1,9 @@
 set(EXTRACTOR_SRCS
     bvh_extractor.cpp
     extract_bvh2.cpp
-    ../../src/driver/obj.cpp
-    ../../src/driver/obj.h
-    ../../src/driver/bvh.h)
+    ../../src/runtime/obj.cpp
+    ../../src/runtime/obj.h
+    ../../src/runtime/bvh.h)
 
 if (EMBREE_FOUND)
     set(EXTRACTOR_SRCS ${EXTRACTOR_SRCS}

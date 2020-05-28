@@ -554,19 +554,12 @@ fn @make_cpu_device(use_embree: bool, vector_compact: bool, single: bool, min_ma
                 make_cpu_bvh4_tri4(nodes, tris)
             }
         },
-        load_png: @ |filename| {
+        load_img: @ |filename| {
             let mut pixel_data;
             let mut width;
             let mut height;
-            rodent_load_png(0, filename, &mut pixel_data, &mut width, &mut height);
-            make_image_rgba32(@ |x, y| (pixel_data as &[u32])(y * width + x), width, height)
-        },
-        load_jpg: @ |filename| {
-            let mut pixel_data;
-            let mut width;
-            let mut height;
-            rodent_load_jpg(0, filename, &mut pixel_data, &mut width, &mut height);
-            make_image_rgba32(@ |x, y| (pixel_data as &[u32])(y * width + x), width, height)
+            rodent_load_img(0, filename, &mut pixel_data, &mut width, &mut height);
+            make_image_rgba32(cpu_intrinsics, @ |x, y, c| (pixel_data as &[f32])(y * width*4 + x*4 + c), width, height)
         }
     }
 }

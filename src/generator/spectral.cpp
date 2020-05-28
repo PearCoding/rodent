@@ -78,6 +78,12 @@ static int find_interval(const float *values, int size_, float x)
 
 void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, float *out_a, float *out_b, float *out_c, size_t elems)
 {
+    prepare(r,1,g,1,b,1,out_a,1,out_b,1,out_c,1,elems);
+}
+    
+void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, size_t g_slice, const float* b, size_t b_slice,
+	float* out_a, size_t oa_slice, float* out_b, size_t ob_slice, float* out_c, size_t oc_slice, 
+	size_t elems) {                    
     constexpr float EPS = 0.0001f;
     constexpr float ZERO_A = 0;
     constexpr float ZERO_B = 0;
@@ -94,7 +100,7 @@ void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, 
     float coeffs[COEFFS_N];
     for (size_t i = 0; i < elems; ++i)
     {
-        const float rgb[3] = {r[i], g[i], b[i]};
+        const float rgb[3] = {r[i*r_slice], g[i*g_slice], b[i*b_slice]};
 
         // Handle special case when rgb is zero
         if (rgb[0] <= EPS && rgb[1] <= EPS && rgb[2] <= EPS)
@@ -138,8 +144,8 @@ void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, 
             ++off;
         }
 
-        out_a[i] = coeffs[0];
-        out_b[i] = coeffs[1];
-        out_c[i] = coeffs[2];
+        out_a[i*oa_slice] = coeffs[0];
+        out_b[i*ob_slice] = coeffs[1];
+        out_c[i*oc_slice] = coeffs[2];
     }
 }
