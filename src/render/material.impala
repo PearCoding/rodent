@@ -174,7 +174,7 @@ fn @make_bk7_refractive_index(math: Intrinsics) -> fn(f32) -> f32 {
         let um = wvl / 1000.0f;// To micro meters
         let um2 = um*um;
         let n2 = 2.27110883f - 0.00938988354f*um2 - 0.000100277081f*um2*um2 + 0.0109572221f/um2 + 0.000120210067f/(um2 * um2);
-        math.sqrtf(n2)
+        max_2_f32(math.sqrtf(n2), 1.0f)
     }
 }
 

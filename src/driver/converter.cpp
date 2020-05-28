@@ -995,7 +995,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
            << "            light_verts.load_vec3(i * 3 + 2),\n"
            << "            light_norms.load_vec3(i),\n"
            << "            light_areas.load_f32(i),\n"
-           << "            make_d65_illum(1.0f)/*make_coeff_spectrum_v(math, light_colors.load_vec3(i))*/\n"
+           << "            make_d65_illum(10.0f)/*make_coeff_spectrum_v(math, light_colors.load_vec3(i))*/\n"
            << "        )\n"
            << "    };\n";
     }

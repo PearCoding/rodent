@@ -5,13 +5,15 @@
 #include <cstring>
 #include <chrono>
 #include <cmath>
+#include <array>
 
 #ifndef DISABLE_GUI
 #include <SDL.h>
 #endif
 
 #define CULL_BAD_COLOR
-//#define CATCH_BAD_COLOR
+#define CATCH_BAD_COLOR
+#define USE_MEDIAN_FOR_LUMINANCE_ESTIMATION
 
 #ifndef NDEBUG
 #include <fenv.h>
@@ -152,14 +154,40 @@ static inline float reinhard_modified(float L) {
     return (L*(1.0f+L/(WhitePoint*WhitePoint)))/(1.0f+L);
 }
 
-static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, size_t height, uint32_t iter) {
-    auto film = get_pixels();
-    auto inv_iter = 1.0f / iter;
-    auto inv_gamma = 1.0f / 2.2f;
 
-    //float avg_luminance = 0.0f;
+static float estimateLuminance(size_t width, size_t height) {
+    auto film = get_pixels();
     float max_luminance = 0.00001f;
-    //const float inv_f = 1.0f/(width*height);
+
+#ifdef USE_MEDIAN_FOR_LUMINANCE_ESTIMATION
+    constexpr size_t WINDOW_S = 3;
+    constexpr size_t EDGE_S = WINDOW_S/2;
+    std::array<float, WINDOW_S*WINDOW_S> window;
+
+    for (size_t y = EDGE_S; y < height-EDGE_S; ++y) {
+        for (size_t x = EDGE_S; x < width-EDGE_S; ++x) {
+
+            size_t i = 0;
+            for(size_t wy = 0; wy <WINDOW_S; ++wy) {
+                for(size_t wx = 0; wx <WINDOW_S; ++wx) {
+                    const auto ix = x + wx - EDGE_S;
+                    const auto iy = y + wy - EDGE_S;
+
+                    auto r = film[(iy * width + ix) * 3 + 0];
+                    auto g = film[(iy * width + ix) * 3 + 1];
+                    auto b = film[(iy * width + ix) * 3 + 2];
+
+                    window[i] = srgb_to_xyY(rgb(r,g,b)).z;
+                    ++i;
+                }
+            }
+
+            std::sort(window.begin(), window.end());
+            const auto L = window[window.size()/2];
+            max_luminance = std::max(max_luminance, L);
+        }
+    }
+#else
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
             auto r = film[(y * width + x) * 3 + 0];
@@ -167,12 +195,20 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
             auto b = film[(y * width + x) * 3 + 2];
 
             const auto L = srgb_to_xyY(rgb(r,g,b)).z;
-            //avg_luminance += L*inv_f;
             max_luminance = std::max(max_luminance, L);
         }
     }
+#endif
 
-    //avg_luminance = std::max(0.00001f, avg_luminance) * inv_iter;
+    return max_luminance;
+}
+
+static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, size_t height, uint32_t iter) {
+    auto film = get_pixels();
+    auto inv_iter = 1.0f / iter;
+    auto inv_gamma = 1.0f / 2.2f;
+    
+    float max_luminance = estimateLuminance(width, height);
 
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
@@ -350,7 +386,7 @@ int main(int argc, char** argv) {
 #endif
 
 #if !defined(NDEBUG)
-feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
+    feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
 #endif
 
     auto spp = get_spp();

@@ -245,6 +245,8 @@ static bool parse_obj(std::istream& stream, obj::File& file) {
             file.mtl_libs.push_back(lib_name);
         } else if (*ptr == 's' && std::isspace(ptr[1])) {
             // Ignore smooth commands
+        } else if (*ptr == 'l' && std::isspace(ptr[1])) {
+            // Ignore polyline commands
         } else {
             error("Unknown command '", ptr, "' (line ", cur_line, ").");
             err_count++;
