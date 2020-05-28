@@ -58,6 +58,10 @@ fn @make_spectral_pdf_hero_only(pdf: f32) -> SpectralPDF {
     make_spectral_pdf(pdf, 0.0f, 0.0f, 0.0f)
 }
 
+fn @make_spectral_pdf_adp(pdf: f32, is_varying: bool) -> SpectralPDF {
+    if is_varying { make_spectral_pdf_hero_only(pdf) } else { make_spectral_pdf_splat(pdf) }
+}
+
 fn @spectral_pdf_add(a: SpectralPDF, b: SpectralPDF) -> SpectralPDF {
     make_spectral_pdf(a.hero + b.hero, a.s1 + b.s1, a.s2 + b.s2, a.s3 + b.s3)
 }
@@ -195,6 +199,10 @@ fn @spectrum_eval(s: Spectrum, wvl: SpectralWavelength) -> SpectralWeight {
 
 fn @spectrum_eval_hero(s: Spectrum, wvl: SpectralWavelength) -> SpectralWeight {
     make_spectral_weight(s.value(wvl.hero), 0.0f, 0.0f, 0.0f)
+}
+
+fn @spectrum_eval_adp(s: Spectrum, wvl: SpectralWavelength, is_varying: bool) -> SpectralWeight {
+    if is_varying { spectrum_eval_hero(s, wvl) } else { spectrum_eval(s, wvl) }
 }
 
 fn @spectral_integrate(s: SpectralWeight, w: SpectralWavelength, r: Spectrum) -> f32 {

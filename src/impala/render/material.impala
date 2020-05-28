@@ -5,6 +5,35 @@ struct Material {
     is_emissive: bool
 }
 
+struct RefractiveIndex {
+    eval:       fn(f32) -> f32,
+    is_varying: bool
+}
+
+fn @make_const_refractive_index(n: f32) -> RefractiveIndex {
+    RefractiveIndex {
+        eval: @|_| { n },
+        is_varying: false
+    }
+}
+
+fn @make_varying_refractive_index(n: fn(f32) -> f32) -> RefractiveIndex {
+    RefractiveIndex {
+        eval: n,
+        is_varying: true
+    }
+}
+
+// https://refractiveindex.info/?shelf=glass&book=BK7&page=HIKARI
+fn @make_bk7_refractive_index(math: Intrinsics) -> RefractiveIndex {
+    make_varying_refractive_index(@|wvl| {
+        let um = wvl / 1000.0f;// To micro meters
+        let um2 = um*um;
+        let n2 = 2.27110883f - 0.00938988354f*um2 - 0.000100277081f*um2*um2 + 0.0109572221f/um2 + 0.000120210067f/(um2 * um2);
+        max_2_f32(math.sqrtf(n2), 1.0f)
+    })
+}
+
 // Opaque description of a point on a surface
 struct SurfaceElement {
     is_entering: bool,              // True if the path enters the surface
@@ -125,13 +154,14 @@ fn @make_phong_bsdf(math: Intrinsics, surf: SurfaceElement, ks: Spectrum, ns: f3
 }
 
 // Creates a perfect mirror BSDF
+// The mirror BSDF is not spectral varying
 fn @make_mirror_bsdf(math: Intrinsics, surf: SurfaceElement, ks: Spectrum) -> Bsdf {
     Bsdf {
         eval: @ |in_dir, out_dir, _| make_spectral_weight_zero(),
         pdf:  @ |in_dir, out_dir, _| make_spectral_pdf_zero(),
         sample: @ |rnd, out_dir, wvl, _| {
-            let pdf = make_spectral_pdf_hero_only(1.0f);
-            let color = spectrum_eval_hero(ks, wvl);
+            let pdf = make_spectral_pdf_splat(1.0f);
+            let color = spectrum_eval(ks, wvl);
             make_bsdf_sample(surf, vec3_reflect(out_dir, surf.local.col(2)), pdf, 1.0f, color, false)
         },
         is_specular: true
@@ -139,13 +169,16 @@ fn @make_mirror_bsdf(math: Intrinsics, surf: SurfaceElement, ks: Spectrum) -> Bs
 }
 
 // Creates a perfect glass BSDF
-fn @make_glass_bsdf(math: Intrinsics, surf: SurfaceElement, n1: f32, n2: fn(f32) -> f32, ks: Spectrum, kt: Spectrum) -> Bsdf {
+// The glass BSDF is can be spectral varying
+fn @make_glass_bsdf(math: Intrinsics, surf: SurfaceElement, n1: RefractiveIndex, n2: RefractiveIndex, ks: Spectrum, kt: Spectrum) -> Bsdf {
     Bsdf {
         eval: @ |in_dir, out_dir, _| make_spectral_weight_zero(),
         pdf:  @ |in_dir, out_dir, _| make_spectral_pdf_zero(),
         sample: @ |rnd, out_dir, wvl, adjoint| {
-            let k = if surf.is_entering { n1 / n2(wvl.hero) } else { n2(wvl.hero) / n1 };
-            //let k = if surf.is_entering { n1 / 1.55f } else { 1.55f / n1 };
+            let cn1 = n1.eval(wvl.hero);
+            let cn2 = n2.eval(wvl.hero);
+            let is_varying = n1.is_varying || n2.is_varying;
+            let k = if surf.is_entering { cn1 / cn2 } else { cn2 / cn1 };
             let n = surf.local.col(2);
             let cos_i = vec3_dot(out_dir, n);
             let cos2_t = 1.0f - k * k * (1.0f - cos_i * cos_i);
@@ -157,24 +190,16 @@ fn @make_glass_bsdf(math: Intrinsics, surf: SurfaceElement, n1: f32, n2: fn(f32)
                 if (randf(rnd) > F) {
                     let t = vec3_sub(vec3_mulf(n, k * cos_i - cos_t), vec3_mulf(out_dir, k));
                     let adjoint_term = if adjoint { k * k } else { 1.0f };
-                    let color = spectrum_eval_hero(spectrum_mulf(kt, adjoint_term), wvl);
-                    return(make_bsdf_sample(surf, t, make_spectral_pdf_hero_only(1.0f), 1.0f, color, true))
+                    let color = spectrum_eval_adp(spectrum_mulf(kt, adjoint_term), wvl, is_varying);
+                    return(make_bsdf_sample(surf, t, make_spectral_pdf_adp(1.0f, is_varying), 1.0f, color, true))
                 }
             }
             // Reflection
-            make_bsdf_sample(surf, vec3_reflect(out_dir, n), make_spectral_pdf_hero_only(1.0f), 1.0f, spectrum_eval_hero(ks, wvl), false)
+            make_bsdf_sample(surf, vec3_reflect(out_dir, n),
+                make_spectral_pdf_adp(1.0f, is_varying), 1.0f,
+                spectrum_eval_adp(ks, wvl, is_varying), false)
         },
         is_specular: true
-    }
-}
-
-// https://refractiveindex.info/?shelf=glass&book=BK7&page=HIKARI
-fn @make_bk7_refractive_index(math: Intrinsics) -> fn(f32) -> f32 {
-    @|wvl| {
-        let um = wvl / 1000.0f;// To micro meters
-        let um2 = um*um;
-        let n2 = 2.27110883f - 0.00938988354f*um2 - 0.000100277081f*um2*um2 + 0.0109572221f/um2 + 0.000120210067f/(um2 * um2);
-        max_2_f32(math.sqrtf(n2), 1.0f)
     }
 }
 
