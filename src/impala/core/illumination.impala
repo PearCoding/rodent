@@ -39,3 +39,7 @@ static D65 : [f32] = [0.000341f, 0.016643f, 0.032945f, 0.117652f,
 fn @make_d65_illum(power: f32) -> Spectrum {
     make_spectrum(@|wvl|{ power * eval_equidistant_spectrum(wvl, D65, 107, 300.0f, 830.0f) })
 }
+
+fn @make_colored_d65_illum(power: f32, other: Spectrum) -> Spectrum {
+    spectrum_mul(make_d65_illum(power), other)
+}

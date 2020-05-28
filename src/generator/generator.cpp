@@ -523,6 +523,17 @@ static rgb upsample_rgb(const rgb &c)
     return v;
 }
 
+static void upsample_emissive_rgb(const rgb& c, rgb& color, float& power) {
+    float max = std::max(c.x, std::max(c.y, c.z));
+    if(max == 0.0f) {
+        color = upsample_rgb(c);
+        power = 0.0f;
+    } else {
+        color = upsample_rgb(c / max);
+        power = max;
+    }
+}
+
 static std::string convert_image(const FilePath& path) {
     ImageRgba32 data;
     const auto ext = path.extension();
@@ -906,6 +917,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
     std::vector<float3> light_verts;
     std::vector<float3> light_norms;
     std::vector<float> light_areas;
+    std::vector<float> light_powers;
     for (size_t i = 0; i < tri_mesh.indices.size(); i += 4)
     {
         // Do not leave this array undefined, even if this triangle is not a light
@@ -918,7 +930,10 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
         if (mat.ke == rgb(0.0f) && mat.map_ke == "")
             continue;
 
-        const auto kec = upsample_rgb(mat.ke);
+        rgb kec;
+        float kec_power;
+        upsample_emissive_rgb(mat.ke, kec, kec_power);
+        
         auto &v0 = tri_mesh.vertices[tri_mesh.indices[i + 0]];
         auto &v1 = tri_mesh.vertices[tri_mesh.indices[i + 1]];
         auto &v2 = tri_mesh.vertices[tri_mesh.indices[i + 2]];
@@ -931,13 +946,13 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
                << "        make_vec3(" << v0.x << "f, " << v0.y << "f, " << v0.z << "f),\n"
                << "        make_vec3(" << v1.x << "f, " << v1.y << "f, " << v1.z << "f),\n"
                << "        make_vec3(" << v2.x << "f, " << v2.y << "f, " << v2.z << "f),\n";
-            if (mat.map_ke != "")
+            if (mat.map_ke != "")// TODO
             {
                 os << "        make_texture(math, make_repeat_border(), make_bilinear_filter(), image_" << make_id(image_names[images[mat.map_ke]]) << ")\n";
             }
             else
             {
-                os << "        make_coeff_spectrum(math, " << kec.x << "f, " << kec.y << "f, " << kec.z << "f)\n";
+                os << "        make_colored_d65_illum(" << kec_power << "f, make_coeff_spectrum(math, " << kec.x << "f, " << kec.y << "f, " << kec.z << "f))\n";
             }
             os << "    );\n";
         }
@@ -952,6 +967,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
             light_norms.emplace_back(n);
             light_areas.emplace_back(inv_area);
             light_colors.emplace_back(kec);
+            light_powers.emplace_back(kec_power);
         }
     }
     if (has_map_ke || num_lights == 0)
@@ -979,10 +995,13 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
         write_buffer("data/light_areas.bin", light_areas);
         write_buffer("data/light_norms.bin", pad_buffer(light_norms, enable_padding, sizeof(float) * 4));
         write_buffer("data/light_colors.bin", pad_buffer(light_colors, enable_padding, sizeof(float) * 4));
+        write_buffer("data/light_powers.bin", light_powers);
+
         os << "    let light_verts = device.load_buffer(\"data/light_verts.bin\");\n"
            << "    let light_areas = device.load_buffer(\"data/light_areas.bin\");\n"
            << "    let light_norms = device.load_buffer(\"data/light_norms.bin\");\n"
            << "    let light_colors = device.load_buffer(\"data/light_colors.bin\");\n"
+           << "    let light_powers = device.load_buffer(\"data/light_powers.bin\");\n"
            << "    let lights = @ |i| {\n"
            << "        make_precomputed_triangle_light(\n"
            << "            math,\n"
@@ -991,7 +1010,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
            << "            light_verts.load_vec3(i * 3 + 2),\n"
            << "            light_norms.load_vec3(i),\n"
            << "            light_areas.load_f32(i),\n"
-           << "            make_d65_illum(10.0f)/*make_coeff_spectrum_v(math, light_colors.load_vec3(i))*/\n"
+           << "            make_colored_d65_illum(light_powers.load_f32(i), make_coeff_spectrum_v(math, light_colors.load_vec3(i)))\n"
            << "        )\n"
            << "    };\n";
     }
