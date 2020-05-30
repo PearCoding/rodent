@@ -6,6 +6,10 @@ src/driver/interface.h
 
 build/
 
+# Used for testing
+run_rodent.sh
+debug_rodent.sh
+
 # Compiled Object files
 *.slo
 *.lo

@@ -175,9 +175,7 @@ fn @make_path_tracing_renderer(max_path_len: i32, spp: i32)-> Renderer {
             let contrib = spectral_weight_mul(state.contrib, mat_sample.color);
             let mis = if mat.bsdf.is_specular { 0.0f } else { spectral_pdf_mis(mat_sample.pdf) };
             let factor = mat_sample.pdf.hero * rr_prob;
-            if factor <= 0.0001f {
-                return()
-            }
+            if factor <= 0.0001f { return() } // Safety check
 
             bounce(
                 make_ray(surf.point, mat_sample.in_dir, ray.wvl, offset, flt_max),
