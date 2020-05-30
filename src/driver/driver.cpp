@@ -85,9 +85,18 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                     case SDLK_KP_PLUS:  speed[0] = key_down; break;
                     case SDLK_KP_MINUS: speed[1] = key_down; break;
                     case SDLK_UP:       arrows[0] = key_down; break;
+                    case SDLK_w:        arrows[0] = key_down; break;
                     case SDLK_DOWN:     arrows[1] = key_down; break;
+                    case SDLK_s:        arrows[1] = key_down; break;
                     case SDLK_LEFT:     arrows[2] = key_down; break;
+                    case SDLK_a:        arrows[2] = key_down; break;
                     case SDLK_RIGHT:    arrows[3] = key_down; break;
+                    case SDLK_d:        arrows[3] = key_down; break;
+                    case SDLK_c:
+                        info("Camera Eye: ", cam.eye.x, " ", cam.eye.y, " ", cam.eye.z );
+                        info("Camera Dir: ", cam.dir.x, " ", cam.dir.y, " ", cam.dir.z);
+                        info("Camera Up:  ", cam.up.x, " ", cam.up.y, " ", cam.up.z);
+                        break;
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
