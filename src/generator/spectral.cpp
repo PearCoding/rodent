@@ -1,6 +1,7 @@
 #include "spectral.h"
 #include <fstream>
 #include <cstring>
+#include <limits>
 
 // Base on Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling.
 // In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
@@ -87,7 +88,11 @@ void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, 
     constexpr float EPS = 0.0001f;
     constexpr float ZERO_A = 0;
     constexpr float ZERO_B = 0;
-    constexpr float ZERO_C = -50.0f; // -500 is also possible and is closer to zero, but -50 is sufficient for floats
+    constexpr float ZERO_C = -std::numeric_limits<float>::infinity(); // -500 is also possible and is closer to zero, but -50 is sufficient for floats
+
+    constexpr float ONE_A = 0;
+    constexpr float ONE_B = 0;
+    constexpr float ONE_C = std::numeric_limits<float>::infinity();
 
     const auto res = mInternal->Resolution;
     const auto dx = COEFFS_N;
@@ -103,13 +108,17 @@ void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, 
         const float rgb[3] = {r[i*r_slice], g[i*g_slice], b[i*b_slice]};
 
         // Handle special case when rgb is zero
-        if (rgb[0] <= EPS && rgb[1] <= EPS && rgb[2] <= EPS)
-        {
+        if (rgb[0] <= EPS && rgb[1] <= EPS && rgb[2] <= EPS) {
             out_a[i] = ZERO_A;
             out_b[i] = ZERO_B;
             out_c[i] = ZERO_C;
             continue;
-        }
+        } /*else if(1-rgb[0] <= EPS && 1-rgb[1] <= EPS && 1-rgb[2] <= EPS) {
+            out_a[i] = ONE_A;
+            out_b[i] = ONE_B;
+            out_c[i] = ONE_C;
+            continue;
+        }*/
 
         // Determine largest entry
         int largest_entry = 0;

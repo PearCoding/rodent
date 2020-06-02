@@ -164,3 +164,18 @@ fn @max_2_f32(a: f32, b: f32) -> f32 {
 fn @max_4_f32(a: f32, b: f32, c: f32, d: f32) -> f32 {
     max_2_f32(max_2_f32(a,b), max_2_f32(c,d))
 }
+
+fn @min_2_f32(a: f32, b: f32) -> f32 {
+    if a < b { a } else { b }
+}
+
+// Some useful math stuff
+
+// Only valid in range -1 < u < 1
+fn @atanhf(math: Intrinsics, u: f32) -> f32 {
+    0.5f * math.logf((1.0f + u)/(1.0f - u + 0.00001f))
+}
+
+fn @sechf(math: Intrinsics, u: f32) -> f32 {
+    2.0f * math.expf(u)/(math.expf(2.0f * u) + 1.0f)
+}

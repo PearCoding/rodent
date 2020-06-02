@@ -132,7 +132,7 @@ fn @russian_roulette(c: SpectralWeight, clamp: f32) -> f32 {
 }
 
 // Sample spectral range
-fn @sample_spectral_sample(math: Intrinsics, u: f32, wavelength_start: f32, wavelength_end: f32) -> SpectralSample {
+fn @sample_uniform_spectral_sample(math: Intrinsics, u: f32, wavelength_start: f32, wavelength_end: f32) -> SpectralSample {
     let span = wavelength_end-wavelength_start;
     let hero = u*span;
     let delta = span/4.0f;
@@ -140,13 +140,45 @@ fn @sample_spectral_sample(math: Intrinsics, u: f32, wavelength_start: f32, wave
         math.fmodf(hero+1.0f*delta, span)+wavelength_start,
         math.fmodf(hero+2.0f*delta, span)+wavelength_start,
         math.fmodf(hero+3.0f*delta, span)+wavelength_start);
-    let pdf = spectral_sample_pdf(u, wavelength_start, wavelength_end);
+    let pdf = spectral_uniform_sample_pdf(u, wavelength_start, wavelength_end);
     let pdfs = make_spectral_pdf(pdf, pdf, pdf, pdf);
 
-    make_spectral_sample(wavelengths, pdfs)
+    make_spectral_sample(wavelengths, pdfs, make_spectral_weight(1.0f/pdfs.hero, 1.0f/pdfs.s1, 1.0f/pdfs.s2, 1.0f/pdfs.s3))
 }
 
 // Returns uniform pdf for wavelength range
-fn @spectral_sample_pdf(u: f32, wavelength_start: f32, wavelength_end: f32) -> f32 {
+fn @spectral_uniform_sample_pdf(u: f32, wavelength_start: f32, wavelength_end: f32) -> f32 {
     1.0f/(wavelength_end - wavelength_start)
 }
+
+// Based on "An Improved Technique for Full Spectral Rendering"
+// by Radziszewski, Boryczko, and Alda
+// Only valid for range 360 - 830
+fn @sample_rgb_spectral_sample(math: Intrinsics, u: f32) -> SpectralSample {
+    let sample_wvl = @ |k| { 538.0f - atanhf(math, 0.8569106254698279f - 1.8275019724092267f * k) * 138.88888888888889f };
+
+    let wavelengths = make_spectral_wavelength(sample_wvl(u),
+        sample_wvl(math.fmodf(u+1.0f/4.0f, 1.0f)),
+        sample_wvl(math.fmodf(u+2.0f/4.0f, 1.0f)),
+        sample_wvl(math.fmodf(u+3.0f/4.0f, 1.0f)));
+
+    let pdfs = make_spectral_pdf(
+        spectral_rgb_sample_pdf_wvl(math, wavelengths.hero),
+        spectral_rgb_sample_pdf_wvl(math, wavelengths.s1),
+        spectral_rgb_sample_pdf_wvl(math, wavelengths.s2),
+        spectral_rgb_sample_pdf_wvl(math, wavelengths.s3));
+
+    make_spectral_sample(wavelengths, pdfs, make_spectral_weight(1.0f/pdfs.hero, 1.0f/pdfs.s1, 1.0f/pdfs.s2, 1.0f/pdfs.s3))
+}
+
+fn @spectral_rgb_sample_pdf_wvl(math: Intrinsics, wvl: f32) -> f32 {
+    let t = sechf(math, 0.0072f * (wvl - 538.0f));
+    0.003939804229326285f * t * t
+}
+
+// Easy selector
+fn @sample_default_spectral_sample(math: Intrinsics, u: f32) -> SpectralSample {
+    sample_rgb_spectral_sample(math, u)
+    //sample_uniform_spectral_sample(math, u, CIE_WAVELENGTH_START, CIE_WAVELENGTH_END)
+}
+

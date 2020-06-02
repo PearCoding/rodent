@@ -267,7 +267,6 @@ static void save_image(const std::string& out_file, size_t width, size_t height,
 
     auto film = get_pixels();
     auto inv_iter = 1.0f / iter;
-    auto inv_gamma = 1.0f / 2.2f;
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
             auto r = film[(y * width + x) * 3 + 0];

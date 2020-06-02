@@ -19,7 +19,8 @@ type SpectralPDF = SpectralBase;
 
 struct SpectralSample {
     wavelength: SpectralWavelength,
-    pdf: SpectralPDF
+    pdf: SpectralPDF,
+    weight: SpectralWeight
 }
 
 fn @make_spectral_wavelength(hero: f32, s1: f32, s2: f32, s3: f32 ) -> SpectralWavelength {
@@ -91,10 +92,11 @@ fn @spectral_pdf_mis(a: SpectralPDF) -> f32 {
 }
 
 //---------------------------
-fn @make_spectral_sample(wavelength: SpectralWavelength, pdf: SpectralPDF) -> SpectralSample {
+fn @make_spectral_sample(wavelength: SpectralWavelength, pdf: SpectralPDF, weight: SpectralWeight) -> SpectralSample {
     SpectralSample {
         wavelength: wavelength,
-        pdf: pdf
+        pdf: pdf,
+        weight: weight
     }
 }
 
@@ -205,19 +207,21 @@ fn @spectrum_eval_adp(s: Spectrum, wvl: SpectralWavelength, is_varying: bool) ->
     if is_varying { spectrum_eval_hero(s, wvl) } else { spectrum_eval(s, wvl) }
 }
 
-fn @spectral_integrate(s: SpectralWeight, w: SpectralWavelength, r: Spectrum) -> f32 {
-    s.hero * r.value(w.hero) + s.s1 * r.value(w.s1) + s.s2 * r.value(w.s2) + s.s3 * r.value(w.s3)
-}
-
 // CoeffSpectrum
 // Base on Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling.
 // In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
 fn @make_coeff_spectrum(math: Intrinsics, cA: f32, cB: f32, cC: f32) -> Spectrum {
-    make_spectrum(@|wvl| {
-        let x = (cA * wvl + cB) * wvl + cC;
-		let y = 1.0f/math.sqrtf(x*x + 1.0f);
-        max_2_f32(0.5f * x * y + 0.5f, 0.0f)
-    })
+    if cA == 0.0f && cB == 0.0f && cC == flt_inf {
+        make_spectrum_identity()
+    } else if cA == 0.0f && cB == 0.0f && cC == -flt_inf {
+        make_spectrum_none()
+    } else {
+        make_spectrum(@|wvl| {
+            let x = (cA * wvl + cB) * wvl + cC;
+            let y = 1.0f/math.sqrtf(x*x + 1.0f);
+            max_2_f32(0.5f * x * y + 0.5f, 0.0f)
+        })
+    }
 }
 
 fn @make_coeff_spectrum_v(math: Intrinsics, v: Vec3) -> Spectrum {

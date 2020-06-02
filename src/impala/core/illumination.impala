@@ -1,16 +1,15 @@
 fn @eval_equidistant_spectrum(wvl: f32, data: &[f32], size: i32, start: f32, end: f32) -> f32 {
     let delta = (end - start)/((size - 1) as f32);
-    let f	  = (wvl - start) / delta;
-    let f2    = if f < 0.0f { 0.0f } else { f };
-    let ind   = if (f2 as i32) > size - 2 { size - 2 } else { f2 as i32 }; 
-	let t	  = f2 - (ind as f32);
+    let f	  = max_2_f32(0.0f, min_2_f32((size-2) as f32, (wvl - start) / delta));
+    let ind   = f as i32; 
+	let t	  = f - (ind as f32);
 
     data(ind) * (1.0f - t) + data(ind + 1) * t
 }
 
-static D65 : [f32] = [0.000341f, 0.016643f, 0.032945f, 0.117652f,
+static D65 : [f32] = [/*0.000341f, 0.016643f, 0.032945f, 0.117652f,
         0.20236f, 0.286447f, 0.370535f, 0.385011f,
-        0.399488f, 0.424302f, 0.449117f, 0.45775f,
+        0.399488f, 0.424302f, 0.449117f, 0.45775f,*/
         0.466383f, 0.493637f, 0.520891f, 0.510323f,
         0.499755f, 0.523118f, 0.546482f, 0.687015f,
         0.827549f, 0.871204f, 0.91486f, 0.924589f,
@@ -36,10 +35,18 @@ static D65 : [f32] = [0.000341f, 0.016643f, 0.032945f, 0.117652f,
         0.594519f, 0.557054f, 0.51959f, 0.546998f,
         0.574406f, 0.588765f, 0.603125f];
 
+// Power is scaled down such that power=1 equals (1,1,1) in sRGB for D65 illuminants
+static PowerScale : f32 = 1.0f/105.67296665421995f;
+
 fn @make_d65_illum(power: f32) -> Spectrum {
-    make_spectrum(@|wvl|{ power * eval_equidistant_spectrum(wvl, D65, 107, 300.0f, 830.0f) })
+    make_spectrum(@|wvl|{ (power*PowerScale) * eval_equidistant_spectrum(wvl, D65, 95, 360.0f,/*107, 300.0f,*/ 830.0f) })
 }
 
 fn @make_colored_d65_illum(power: f32, other: Spectrum) -> Spectrum {
     spectrum_mul(make_d65_illum(power), other)
+}
+
+fn @make_e_illum(power: f32) -> Spectrum {
+    //spectrum_mulf(make_spectrum_identity(), power*PowerScale)
+    spectrum_mulf(make_spectrum_identity(), power)
 }

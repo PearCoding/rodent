@@ -2,11 +2,25 @@ struct ToneMapper {
     map: fn(SpectralWavelength, SpectralWeight) -> Color
 }
 
-fn @make_tonemapper_hero() -> ToneMapper {
+fn @make_tonemapper(map: fn(SpectralWavelength, SpectralWeight) -> Color ) -> ToneMapper {
     ToneMapper {
-        map: @|_, weights| {
-            make_color(weights.hero, weights.hero, weights.hero)
-        }
+        map: map
+    }
+} 
+
+fn @make_tonemapper_hero() -> ToneMapper {
+    make_tonemapper(@|_, weights| { make_color(weights.hero, weights.hero, weights.hero) } )
+}
+
+fn @make_tonemapper_single(wavelength_index: i32) -> ToneMapper {
+    if wavelength_index == 0 {
+        make_tonemapper(@|_, weights| { make_color(weights.hero, weights.hero, weights.hero) } )
+    } else if wavelength_index == 1 {
+        make_tonemapper(@|_, weights| { make_color(weights.s1, weights.s1, weights.s1) } )
+    } else if wavelength_index == 2 {
+        make_tonemapper(@|_, weights| { make_color(weights.s2, weights.s2, weights.s2) } )
+    } else {
+        make_tonemapper(@|_, weights| { make_color(weights.s3, weights.s3, weights.s3) } )
     }
 }
 
@@ -88,31 +102,31 @@ static CIE_Z : [f32] = [
     0.000000000000f, 0.000000000000f, 0.000000000000f, 0.000000000000f,
     0.000000000000f, 0.000000000000f, 0.000000000000f];
 
+static CIE_WAVELENGTH_START : f32   = 360.0f;
+static CIE_WAVELENGTH_END : f32     = 830.0f;
+
 fn @integrate_cie_xyz(wvl: SpectralWavelength, weights: SpectralWeight) -> Color {
-    let eval = @|a, b, A:&[f32]| {b * eval_equidistant_spectrum(a, A, 95, 360.0f, 830.0f)};
+    let eval = @|a, b, A:&[f32]| {b * eval_equidistant_spectrum(a, A, 95, CIE_WAVELENGTH_START, CIE_WAVELENGTH_END)};
     let sum = @|A:&[f32]| {eval(wvl.hero, weights.hero, A) + eval(wvl.s1, weights.s1, A) + eval(wvl.s2, weights.s2, A) + eval(wvl.s3, weights.s3, A)};
     
-    let x = max_2_f32(sum(CIE_X), 0.0f);
+    /*let x = max_2_f32(sum(CIE_X), 0.0f);
     let y = max_2_f32(sum(CIE_Y), 0.0f);
-    let z = max_2_f32(sum(CIE_Z), 0.0f);
+    let z = max_2_f32(sum(CIE_Z), 0.0f)*/;
+    let x = sum(CIE_X);
+    let y = sum(CIE_Y);
+    let z = sum(CIE_Z);
     make_color(x, y, z)
 }
 
 fn @make_tonemapper_cie_xyz() -> ToneMapper {
-    ToneMapper {
-        map: @|wvl, weights| {
-            integrate_cie_xyz(wvl, weights)
-        }
-    }
+    make_tonemapper( @|wvl, weights| { integrate_cie_xyz(wvl, weights) } )
 }
 
 fn @make_tonemapper_srgb() -> ToneMapper {
-    ToneMapper {
-        map: @|wvl, weights| {
+    make_tonemapper(  @|wvl, weights| {
             let cie = integrate_cie_xyz(wvl, weights);
-            make_color( 3.2404542f*cie.r - 1.5371385f*cie.g - 0.4985314f*cie.b, 
-                       -0.9692660f*cie.r + 1.8760108f*cie.g + 0.0415560f*cie.b,
-                        0.0556434f*cie.r - 0.2040259f*cie.g + 1.0572252f*cie.b)
-        } 
-    }
+            make_color( max_2_f32(3.2404542f*cie.r - 1.5371385f*cie.g - 0.4985314f*cie.b, 0.0f), 
+                    max_2_f32(-0.9692660f*cie.r + 1.8760108f*cie.g + 0.0415560f*cie.b, 0.0f),
+                    max_2_f32(0.0556434f*cie.r - 0.2040259f*cie.g + 1.0572252f*cie.b, 0.0f))
+        } )
 }

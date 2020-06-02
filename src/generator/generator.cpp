@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <cstring>
 #include <limits>
+#include <sstream>
 
 #include "runtime/bvh.h"
 #ifdef ENABLE_EMBREE_BVH
@@ -534,6 +535,18 @@ static void upsample_emissive_rgb(const rgb& c, rgb& color, float& power) {
     }
 }
 
+static std::string escape_f32(float f) {
+    if(std::isinf(f) && !std::signbit(f)) {
+        return "flt_inf";
+    } else if(std::isinf(f) && std::signbit(f)) {
+        return "-flt_inf";
+    } else {
+        std::stringstream sstream;
+        sstream << f << "f";
+        return sstream.str();
+    }
+}
+
 static std::string convert_image(const FilePath& path) {
     ImageRgba32 data;
     const auto ext = path.extension();
@@ -788,6 +801,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
     }
 
     os << "    let renderer = make_path_tracing_renderer(" << max_path_len << " /*max_path_len*/, " << spp << " /*spp*/);\n"
+       //<< "    let renderer = make_whitefurnance_renderer();\n"
        << "    let math     = device.intrinsics;\n";
 
     // Setup camera
@@ -952,7 +966,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
             }
             else
             {
-                os << "        make_colored_d65_illum(" << kec_power << "f, make_coeff_spectrum(math, " << kec.x << "f, " << kec.y << "f, " << kec.z << "f))\n";
+                os << "        make_colored_d65_illum(" << escape_f32(kec_power) << ", make_coeff_spectrum(math, " << escape_f32(kec.x) << ", " << escape_f32(kec.y) << ", " << escape_f32(kec.z) << "))\n";
             }
             os << "    );\n";
         }
@@ -1010,6 +1024,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
            << "            light_verts.load_vec3(i * 3 + 2),\n"
            << "            light_norms.load_vec3(i),\n"
            << "            light_areas.load_f32(i),\n"
+           //<< "            make_d65_illum(1.0f)\n"
            << "            make_colored_d65_illum(light_powers.load_f32(i), make_coeff_spectrum_v(math, light_colors.load_vec3(i)))\n"
            << "        )\n"
            << "    };\n";
@@ -1043,7 +1058,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
         os << "    let shader_" << make_id(mtl_name) << " : Shader = @ |ray, hit, surf| {\n";
         if (mat.illum == 5)
         {
-            os << "        let bsdf = make_mirror_bsdf(math, surf, make_coeff_spectrum(math, " << cks.x << "f, " << cks.y << "f, " << cks.z << "f));\n";
+            os << "        let bsdf = make_mirror_bsdf(math, surf, make_coeff_spectrum(math, " << escape_f32(cks.x) << ", " << escape_f32(cks.y) << ", " << escape_f32(cks.z) << "));\n";
         }
         else if (mat.illum == 7)
         {
@@ -1052,7 +1067,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
             else
                 os << "        let refrac_index =  make_const_refractive_index(" << mat.ni << "f);\n";
             os << "        let bsdf = make_glass_bsdf(math, surf, make_const_refractive_index(1.0f), refrac_index, "
-               << "make_coeff_spectrum(math, " << cks.x << "f, " << cks.y << "f, " << cks.z << "f), make_coeff_spectrum(math, " << ctf.x << "f, " << ctf.y << "f, " << ctf.z << "f));\n";
+               << "make_coeff_spectrum(math, " << escape_f32(cks.x) << ", " << escape_f32(cks.y) << ", " << escape_f32(cks.z) << "), make_coeff_spectrum(math, " << escape_f32(ctf.x) << ", " << escape_f32(ctf.y) << ", " << escape_f32(ctf.z) << "));\n";
         }
         else
         {
@@ -1068,7 +1083,7 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
                 }
                 else
                 {
-                    os << "        let kd = make_coeff_spectrum(math, " << ckd.x << "f, " << ckd.y << "f, " << ckd.z << "f);\n";
+                    os << "        let kd = make_coeff_spectrum(math, " << escape_f32(ckd.x) << ", " << escape_f32(ckd.y) << ", " << escape_f32(ckd.z) << ");\n";
                 }
                 os << "        let diffuse = make_diffuse_bsdf(math, surf, kd);\n";
             }
@@ -1081,9 +1096,9 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
                 }
                 else
                 {
-                    os << "        let ks = make_coeff_spectrum(math, " << cks.x << "f, " << cks.y << "f, " << cks.z << "f);\n";
+                    os << "        let ks = make_coeff_spectrum(math, " << escape_f32(cks.x) << ", " << escape_f32(cks.y) << ", " << escape_f32(cks.z) << ");\n";
                 }
-                os << "        let ns = " << mat.ns << "f;\n";
+                os << "        let ns = " << escape_f32(mat.ns) << ";\n";
                 os << "        let specular = make_phong_bsdf(math, surf, ks, ns);\n";
             }
             os << "        let bsdf = ";

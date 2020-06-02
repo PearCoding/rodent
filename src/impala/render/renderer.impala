@@ -33,9 +33,9 @@ fn @make_camera_emitter(scene: Scene, device: Device, iter: i32) -> RayEmitter {
         let mut rnd = hash as RndState;
         let kx = 2.0f * (x as f32 + randf(&mut rnd)) / (width  as f32) - 1.0f;
         let ky = 1.0f - 2.0f * (y as f32 + randf(&mut rnd)) / (height as f32);
-        let wvl_sample = sample_spectral_sample(device.intrinsics, randf(&mut rnd), 380.0f, 780.0f);
+        let wvl_sample = sample_default_spectral_sample(device.intrinsics, randf(&mut rnd));
         let ray = scene.camera.generate_ray(kx, ky, wvl_sample.wavelength);
-        let weight = make_spectral_weight(1.0f/wvl_sample.pdf.hero, 1.0f/wvl_sample.pdf.s1, 1.0f/wvl_sample.pdf.s2, 1.0f/wvl_sample.pdf.s3);
+        let weight = wvl_sample.weight;
         let state = make_ray_state(rnd, weight, 0.0f, 0);
         (ray, state)
     }
@@ -73,6 +73,40 @@ fn @make_emission_renderer() -> Renderer {
                 let emit = mat.emission(out_dir);
                 accumulate(spectrum_eval(emit.intensity, ray.wvl))
             }
+        };
+
+        let path_tracer = PathTracer {
+            on_emit:   on_emit,
+            on_hit:    on_hit,
+            on_shadow: on_shadow,
+            on_bounce: on_bounce
+        };
+
+        let mapper = make_tonemapper_srgb();
+        device.trace(scene, mapper, path_tracer, 1);
+    }
+}
+
+fn @make_whitefurnance_renderer() -> Renderer {
+    @ |scene, device, iter| {
+        let env = make_d65_illum(1.0f);
+        //let env = make_e_illum(1.0f/flt_pi);
+        
+        let on_emit = make_camera_emitter(scene, device, iter);
+        let on_shadow = @ |_, _, _, _, _, _| ();
+        let on_bounce = @ |_, _, _, _, _, _| ();
+        let on_hit = @ |ray, hit, state, surf, mat, accumulate| {
+            if !surf.is_entering { return() }
+
+            let N = surf.local.col(2);
+            let in_dir = vec3_neg(ray.dir);
+            let out_dir = N;
+
+            //let bsdf = spectral_weight_mulf(state.contrib, 1.0f / flt_pi);
+            let bsdf = spectral_weight_mul(state.contrib, mat.bsdf.eval(in_dir, out_dir, ray.wvl));
+            //let bsdf = make_spectral_weight_one();
+            let contrib = spectral_weight_mul(spectrum_eval(env, ray.wvl), bsdf);
+            accumulate(spectral_weight_mulf(contrib, vec3_dot(out_dir, N)))
         };
 
         let path_tracer = PathTracer {
