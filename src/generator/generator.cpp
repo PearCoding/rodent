@@ -524,14 +524,17 @@ static rgb upsample_rgb(const rgb &c)
     return v;
 }
 
+// The upsampler requires a reflective rgb [0, 1]
+// This is handled by rescaling such that the highest component is 50% to achieve smooth spectrals
 static void upsample_emissive_rgb(const rgb& c, rgb& color, float& power) {
     float max = std::max(c.x, std::max(c.y, c.z));
-    if(max == 0.0f) {
+    if(max <= 0.0f) {
         color = upsample_rgb(c);
         power = 0.0f;
     } else {
-        color = upsample_rgb(c / max);
-        power = max;
+        const float scale = 2 * max;
+        color = upsample_rgb(c / scale);
+        power = scale;
     }
 }
 
@@ -1051,7 +1054,6 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
 
         const auto ckd = upsample_rgb(mat.kd);
         const auto cks = upsample_rgb(mat.ks);
-        const auto cke = upsample_rgb(mat.ke);
         const auto ctf = upsample_rgb(mat.tf);
 
         bool has_emission = mat.ke != rgb(0.0f) || mat.map_ke != "";

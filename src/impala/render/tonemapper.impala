@@ -109,13 +109,26 @@ fn @integrate_cie_xyz(wvl: SpectralWavelength, weights: SpectralWeight) -> Color
     let eval = @|a, b, A:&[f32]| {b * eval_equidistant_spectrum(a, A, 95, CIE_WAVELENGTH_START, CIE_WAVELENGTH_END)};
     let sum = @|A:&[f32]| {eval(wvl.hero, weights.hero, A) + eval(wvl.s1, weights.s1, A) + eval(wvl.s2, weights.s2, A) + eval(wvl.s3, weights.s3, A)};
     
-    /*let x = max_2_f32(sum(CIE_X), 0.0f);
-    let y = max_2_f32(sum(CIE_Y), 0.0f);
-    let z = max_2_f32(sum(CIE_Z), 0.0f)*/;
-    let x = sum(CIE_X);
-    let y = sum(CIE_Y);
-    let z = sum(CIE_Z);
-    make_color(x, y, z)
+    // TODO: This compensation method needs a proof of concept
+    let mut compensation : i32 = 0;
+    if weights.hero != 0.0f { compensation += 1; }
+    if weights.s1 != 0.0f { compensation += 1; }
+    if weights.s2 != 0.0f { compensation += 1; }
+    if weights.s3 != 0.0f { compensation += 1; }
+
+    if compensation == 0 {
+        black
+    } else {
+        let factor = 1.0f / (compensation as f32);
+        
+        /*let x = max_2_f32(sum(CIE_X), 0.0f);
+        let y = max_2_f32(sum(CIE_Y), 0.0f);
+        let z = max_2_f32(sum(CIE_Z), 0.0f)*/;
+        let x = sum(CIE_X) * factor;
+        let y = sum(CIE_Y) * factor;
+        let z = sum(CIE_Z) * factor;
+        make_color(x, y, z)
+    }
 }
 
 fn @make_tonemapper_cie_xyz() -> ToneMapper {

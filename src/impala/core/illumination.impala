@@ -47,6 +47,5 @@ fn @make_colored_d65_illum(power: f32, other: Spectrum) -> Spectrum {
 }
 
 fn @make_e_illum(power: f32) -> Spectrum {
-    //spectrum_mulf(make_spectrum_identity(), power*PowerScale)
-    spectrum_mulf(make_spectrum_identity(), power)
+    spectrum_mulf(make_spectrum_identity(), power*PowerScale)
 }

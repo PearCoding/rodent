@@ -6,6 +6,7 @@
  * > Spectrum:            An abstract representation of a spectrum which returns weight/pdf for one arbitary wavelength
  */
 
+static SpectralBandwidth : i32 = 4; 
 struct SpectralBase {
     hero : f32,
     s1 : f32,
@@ -55,6 +56,7 @@ fn @make_spectral_pdf_one( ) -> SpectralPDF {
     make_spectral_pdf_splat(1.0f)
 }
 
+// Compensate?
 fn @make_spectral_pdf_hero_only(pdf: f32) -> SpectralPDF {
     make_spectral_pdf(pdf, 0.0f, 0.0f, 0.0f)
 }

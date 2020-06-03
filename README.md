@@ -16,6 +16,11 @@ Upsampling of existent sRGB data is done with A Low-Dimensional Function Space f
 
     Wenzel Jakob and Johannes Hanika. 2019. A Low-Dimensional Function Space for Efficient Spectral Upsampling. In Computer Graphics Forum (Proceedings of Eurographics) 38(2).
 
+
+Initial sampling of wavelengths at the sensor/camera is based on the work of:
+
+    Radziszewski, Michal & Boryczko, Krzysztof & Alda, Witold. (2009). An Improved Technique for Full Spectral Rendering. Journal of WSCG. 17. 
+
 # Building
 
 The dependencies are: CMake, AnyDSL, libpng, SDL2, and optionally the Embree sources for the benchmarking tools.
