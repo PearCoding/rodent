@@ -1,4 +1,12 @@
-project(rodent)
+cmake_minimum_required(VERSION 3.1...3.15)
+
+if(${CMAKE_VERSION} VERSION_LESS 3.12)
+    cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
+endif()
+
+project(rodent
+    VERSION 0.1
+	DESCRIPTION "A BVH traversal library and renderer implemented using the AnyDSL compiler framework")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -106,6 +114,8 @@ endif()
 # For tests
 include(CTest)
 find_package(ImageMagick COMPONENTS compare QUIET)
+
+add_subdirectory(external/TinyParser-Mitsuba)
 
 add_subdirectory(src)
 add_subdirectory(tools)
