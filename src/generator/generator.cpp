@@ -13,7 +13,8 @@
 #include "driver/interface.h"
 #include "runtime/obj.h"
 #include "runtime/buffer.h"
-#include "runtime/image.h"
+
+#include "export_image.h"
 #include "spectral.h"
 
 #ifdef WIN32
@@ -550,30 +551,6 @@ static std::string escape_f32(float f) {
     }
 }
 
-static std::string convert_image(const FilePath& path) {
-    ImageRgba32 data;
-    const auto ext = path.extension();
-    
-    if(ext =="png")
-        load_png(path, data);
-    else if(ext == "jpg" || ext == "jpeg")
-        load_jpg(path, data);
-    else if(ext == "exr")
-        load_exr(path, data);
-    else {
-        error("Unknown file type '", path.path(), "'");
-        return "";
-    }
-
-    sSpectralUpsampler->prepare(&data.pixels[0], 4, &data.pixels[1], 4, &data.pixels[2], 4,
-                                &data.pixels[0], 4, &data.pixels[1], 4, &data.pixels[2], 4,
-                                data.width*data.height);
-
-    std::string new_path = "data/textures/"+path.remove_extension()+".exr";
-    save_exr(FilePath(new_path), data);
-    return new_path;
-}
-
 static size_t cleanup_obj(obj::File &obj_file, obj::MaterialLib &mtl_lib)
 {
     // Create a dummy material
@@ -922,8 +899,8 @@ static bool convert_obj(const std::string &file_name, Target target, size_t dev,
     os << "\n    // Images\n";
     for (size_t i = 0; i < images.size(); i++) {
         auto name = fix_file(image_names[i]);
-        auto c_name = convert_image(path.base_name() + "/" + name);
-        os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name << "\");\n";
+        auto c_name = export_image(sSpectralUpsampler.get(), path.base_name() + "/" + name);
+        os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
     }
 
     // Lights

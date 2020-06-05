@@ -55,6 +55,8 @@ set(DRIVER_SRCS
     driver/interface.h)
 
 set(GENERATOR_SRCS
+    generator/export_image.h
+    generator/export_image.cpp
     generator/generator.cpp
     generator/spectral.h
     generator/spectral.cpp)
