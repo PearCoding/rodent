@@ -300,12 +300,14 @@ static inline void usage() {
               << "   --up     x y z      Sets the up vector of the camera\n"
               << "   --fov    degrees    Sets the horizontal field of view (in degrees)\n"
               << "   --bench  iterations Enables benchmarking mode and sets the number of iterations\n"
-              << "   -o       image.png  Writes the output image to a file" << std::endl;
+              << "   --nimg   iterations Enables output extraction every n iterations\n"
+              << "   -o       image.exr  Writes the output image to a file" << std::endl;
 }
 
 int main(int argc, char** argv) {
     std::string out_file;
     size_t bench_iter = 0;
+    size_t nimg_iter = 0;
     size_t width  = 1080;
     size_t height = 720;
     float fov = 60.0f;
@@ -336,7 +338,10 @@ int main(int argc, char** argv) {
                 up.z = strtof(argv[++i], nullptr);
             } else if (!strcmp(argv[i], "--fov")) {
                 check_arg(argc, argv, i, 1);
-                fov = strtof(argv[++i], nullptr);
+                fov = strtof(argv[++i], nullptr); 
+            } else if (!strcmp(argv[i], "--nimg")) {
+                check_arg(argc, argv, i, 1);
+                nimg_iter = strtoul(argv[++i], nullptr, 10);
             } else if (!strcmp(argv[i], "--bench")) {
                 check_arg(argc, argv, i, 1);
                 bench_iter = strtoul(argv[++i], nullptr, 10);
@@ -353,6 +358,11 @@ int main(int argc, char** argv) {
         }
         error("Unexpected argument '", argv[i], "'");
     }
+
+    std::string iter_file_prefix = "iteration_";
+    if(out_file != "")
+        iter_file_prefix = FilePath(out_file).remove_extension() + "_";
+
     Camera cam(eye, dir, up, fov, (float)width / (float)height);
 
 #ifdef DISABLE_GUI
@@ -402,6 +412,7 @@ int main(int argc, char** argv) {
     uint64_t timing = 0;
     uint32_t frames = 0;
     uint32_t iter = 0;
+    uint32_t niter = 0;
     std::vector<double> samples_sec;
     while (!done) {
 #ifndef DISABLE_GUI
@@ -427,6 +438,17 @@ int main(int argc, char** argv) {
             samples_sec.emplace_back(1000.0 * double(spp * width * height) / double(elapsed_ms));
             if (samples_sec.size() == bench_iter)
                 break;
+        }
+
+        if (nimg_iter != 0) {
+            ++niter;
+            if(nimg_iter <= niter) {
+                niter = 0;
+                std::stringstream sstream;
+                sstream << iter_file_prefix << iter * spp << ".exr";
+                save_image(sstream.str(), width, height, iter);
+                info("Iteration image saved to '", sstream.str(), "'");
+            }
         }
 
         frames++;
