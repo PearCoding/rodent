@@ -155,6 +155,7 @@ if (COLORIZE)
 endif()
 
 add_executable(rodent ${RODENT_OBJS})
+target_include_directories(rodent PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(rodent PUBLIC rodent_driver ${AnyDSL_runtime_LIBRARIES} ${TBB_LIBRARIES})
 
 if (SCENE_FILE STREQUAL "${PROJECT_SOURCE_DIR}/testing/cornell_box.obj")
