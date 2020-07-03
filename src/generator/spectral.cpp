@@ -84,7 +84,8 @@ void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, 
     
 void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, size_t g_slice, const float* b, size_t b_slice,
 	float* out_a, size_t oa_slice, float* out_b, size_t ob_slice, float* out_c, size_t oc_slice, 
-	size_t elems) {                    
+	size_t elems) {                
+    // TODO: This is not IEC 60559 compliant due to INF*0 -> NaN    
     constexpr float EPS = 0.0001f;
     constexpr float ZERO_A = 0;
     constexpr float ZERO_B = 0;

@@ -531,7 +531,7 @@ static void upsample_emissive_rgb(const rgb& c, rgb& color, float& power) {
     float max = std::max(c.x, std::max(c.y, c.z));
     if(max <= 0.0f) {
         color = upsample_rgb(c);
-        power = 0.0f;
+        power = 1.0f;
     } else {
         const float scale = 2 * max;
         color = upsample_rgb(c / scale);
