@@ -77,15 +77,15 @@ static int find_interval(const float *values, int size_, float x)
     return std::min(left, last_interval);
 }
 
-void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, float *out_a, float *out_b, float *out_c, size_t elems)
+void SpectralUpsampler::prepare(const float *r, const float *g, const float *b, float *out_a, float *out_b, float *out_c, size_t elems) const
 {
     prepare(r,1,g,1,b,1,out_a,1,out_b,1,out_c,1,elems);
 }
     
 void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, size_t g_slice, const float* b, size_t b_slice,
 	float* out_a, size_t oa_slice, float* out_b, size_t ob_slice, float* out_c, size_t oc_slice, 
-	size_t elems) {                
-    // TODO: This is not IEC 60559 compliant due to INF*0 -> NaN    
+	size_t elems) const {                
+    // TODO: This is not IEC 60559 compliant due to INF*0 -> NaN
     constexpr float EPS = 0.0001f;
     constexpr float ZERO_A = 0;
     constexpr float ZERO_B = 0;

@@ -299,10 +299,13 @@ static inline void usage() {
               << "   --dir    x y z      Sets the direction vector of the camera\n"
               << "   --up     x y z      Sets the up vector of the camera\n"
               << "   --fov    degrees    Sets the horizontal field of view (in degrees)\n"
+              << "   --spp    spp        Enables benchmarking mode and sets the number of iterations based on the given spp\n"
               << "   --bench  iterations Enables benchmarking mode and sets the number of iterations\n"
               << "   --nimg   iterations Enables output extraction every n iterations\n"
               << "   -o       image.exr  Writes the output image to a file" << std::endl;
 }
+
+constexpr int SPP_PER_ITERATION = RODENT_SPP;
 
 int main(int argc, char** argv) {
     std::string out_file;
@@ -342,6 +345,9 @@ int main(int argc, char** argv) {
             } else if (!strcmp(argv[i], "--nimg")) {
                 check_arg(argc, argv, i, 1);
                 nimg_iter = strtoul(argv[++i], nullptr, 10);
+            } else if (!strcmp(argv[i], "--spp")) {
+                check_arg(argc, argv, i, 1);
+                bench_iter = (size_t)std::ceil(strtoul(argv[++i], nullptr, 10) / (float)SPP_PER_ITERATION);
             } else if (!strcmp(argv[i], "--bench")) {
                 check_arg(argc, argv, i, 1);
                 bench_iter = strtoul(argv[++i], nullptr, 10);
