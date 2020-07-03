@@ -55,11 +55,17 @@ set(DRIVER_SRCS
     driver/interface.h)
 
 set(GENERATOR_SRCS
+    generator/bvh.h
+    generator/convert_obj.h
+    generator/convert_obj.cpp
     generator/export_image.h
     generator/export_image.cpp
     generator/generator.cpp
+    generator/impala.h
+    generator/platform.h
     generator/spectral.h
-    generator/spectral.cpp)
+    generator/spectral.cpp
+    generator/target.h)
 
 set(RUNTIME_SRCS
     runtime/obj.cpp
@@ -139,6 +145,7 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/main.impala PROPERTIES G
 add_library(rodent_driver STATIC ${DRIVER_SRCS})
 target_link_libraries(rodent_driver PUBLIC rodent_runtime)
 target_include_directories(rodent_driver PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+target_compile_definitions(rodent_driver PRIVATE -DRODENT_SPP=${SPP})
 if (EMBREE_FOUND)
     target_include_directories(rodent_driver PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${LZ4_INCLUDE_DIR})
     target_link_libraries(rodent_driver PUBLIC ${EMBREE_DEPENDENCIES})
