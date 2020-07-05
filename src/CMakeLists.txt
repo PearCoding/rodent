@@ -56,6 +56,8 @@ set(DRIVER_SRCS
 
 set(GENERATOR_SRCS
     generator/bvh.h
+    generator/convert_mts.h
+    generator/convert_mts.cpp
     generator/convert_obj.h
     generator/convert_obj.cpp
     generator/export_image.h
@@ -113,7 +115,7 @@ target_link_libraries(rodent_runtime PUBLIC ${LZ4_LIBRARY} ${PNG_LIBRARIES} ${JP
 
 add_executable(rodent_generator ${GENERATOR_SRCS})
 target_include_directories(rodent_generator PUBLIC ${LZ4_INCLUDE_DIR} $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_link_libraries(rodent_generator PUBLIC rodent_runtime)
+target_link_libraries(rodent_generator PUBLIC rodent_runtime PRIVATE tinyparser_mitsuba)
 target_compile_definitions(rodent_generator PUBLIC -DCPUINFO_PATH="${CPUINFO_PATH}")
 if (COLORIZE)
     target_compile_definitions(rodent_generator PUBLIC -DCOLORIZE)
@@ -145,7 +147,6 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/main.impala PROPERTIES G
 add_library(rodent_driver STATIC ${DRIVER_SRCS})
 target_link_libraries(rodent_driver PUBLIC rodent_runtime)
 target_include_directories(rodent_driver PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_compile_definitions(rodent_driver PRIVATE -DRODENT_SPP=${SPP})
 if (EMBREE_FOUND)
     target_include_directories(rodent_driver PUBLIC ${EMBREE_ROOT_DIR}/include ${EMBREE_ROOT_DIR} ${EMBREE_LIBRARY_DIR} ${PNG_INCLUDE_DIRS} ${JPEG_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${LZ4_INCLUDE_DIR})
     target_link_libraries(rodent_driver PUBLIC ${EMBREE_DEPENDENCIES})

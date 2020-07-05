@@ -69,6 +69,8 @@ struct TriMesh {
 bool load_obj(const FilePath&, File&);
 bool load_mtl(const FilePath&, MaterialLib&);
 TriMesh compute_tri_mesh(const File&, size_t);
+void combine_into_tri_mesh(TriMesh& dst, const TriMesh& src);
+void replace_material_tri_mesh(TriMesh& tri_mesh, uint32_t m_idx);
 
 } // namespace obj
 

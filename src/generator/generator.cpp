@@ -8,6 +8,7 @@
 
 #include "spectral.h"
 #include "convert_obj.h"
+#include "convert_mts.h"
 
 #include "runtime/common.h"
 #include "runtime/file_path.h"
@@ -199,6 +200,9 @@ int main(int argc, char **argv)
     FilePath input_path(input_file);
     if(input_path.extension() == "obj") {
         if (!convert_obj(input_file, target, dev, max_path_len, spp, embree_bvh, fusion, upsampler.get(), of))
+            return 1;
+    } else if(input_path.extension() == "xml") {
+        if (!convert_mts(input_file, target, dev, max_path_len, spp, embree_bvh, fusion, upsampler.get(), of))
             return 1;
     } else {
         error("Unknown input file");

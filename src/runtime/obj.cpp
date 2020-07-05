@@ -411,6 +411,22 @@ static void compute_vertex_normals(const std::vector<uint32_t>& indices,
     }
 }
 
+static void fix_normals(TriMesh& tri_mesh) {
+    // Re-normalize all the values in the OBJ file to handle invalid meshes
+    bool fixed_normals = false;
+    for (auto& n : tri_mesh.normals) {
+        auto len2 = lensqr(n);
+        if (len2 <= std::numeric_limits<float>::epsilon() || std::isnan(len2)) {
+            fixed_normals = true;
+            n = float3(0.0f, 1.0f, 0.0f);
+        } else
+            n = n * (1.0f / std::sqrt(len2));
+    }
+
+    if (fixed_normals)
+        warn("Some normals were incorrect and thus had to be replaced with arbitrary values.");
+}
+
 TriMesh compute_tri_mesh(const File& obj_file, size_t mtl_offset) {
     TriMesh tri_mesh;
 
@@ -493,21 +509,35 @@ TriMesh compute_tri_mesh(const File& obj_file, size_t mtl_offset) {
         }
     }
 
-    // Re-normalize all the values in the OBJ file to handle invalid meshes
-    bool fixed_normals = false;
-    for (auto& n : tri_mesh.normals) {
-        auto len2 = lensqr(n);
-        if (len2 <= std::numeric_limits<float>::epsilon() || std::isnan(len2)) {
-            fixed_normals = true;
-            n = float3(0.0f, 1.0f, 0.0f);
-        } else
-            n = n * (1.0f / std::sqrt(len2));
-    }
-
-    if (fixed_normals)
-        warn("Some normals were incorrect and thus had to be replaced with arbitrary values.");
-
+    fix_normals(tri_mesh);
     return tri_mesh;
 }
 
+void combine_into_tri_mesh(TriMesh& dst, const TriMesh& src) {
+    size_t idx_offset = dst.indices.size();
+    size_t vtx_offset = dst.vertices.size();
+
+    if(idx_offset == 0) {
+        dst = src;
+        return;
+    }
+
+    dst.vertices.insert(dst.vertices.end(),  src.vertices.begin(), src.vertices.end());
+    dst.normals.insert(dst.normals.end(),  src.normals.begin(), src.normals.end());
+    dst.texcoords.insert(dst.texcoords.end(),  src.texcoords.begin(), src.texcoords.end());
+    dst.face_normals.insert(dst.face_normals.end(),  src.face_normals.begin(), src.face_normals.end());
+    
+    dst.indices.resize(idx_offset + src.indices.size());
+    for(size_t i = 0; i < src.indices.size(); i += 4) {
+        dst.indices[idx_offset + i + 0] = src.indices[i + 0] + vtx_offset;
+        dst.indices[idx_offset + i + 1] = src.indices[i + 1] + vtx_offset;
+        dst.indices[idx_offset + i + 2] = src.indices[i + 2] + vtx_offset;
+        dst.indices[idx_offset + i + 3] = src.indices[i + 3]; // Material
+    }
+}
+
+void replace_material_tri_mesh(TriMesh& tri_mesh, uint32_t m_idx) {
+    for(size_t i = 0; i < tri_mesh.indices.size(); i += 4)
+       tri_mesh.indices[i + 3] = m_idx; // Material
+}
 } // namespace obj

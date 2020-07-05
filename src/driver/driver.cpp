@@ -305,8 +305,6 @@ static inline void usage() {
               << "   -o       image.exr  Writes the output image to a file" << std::endl;
 }
 
-constexpr int SPP_PER_ITERATION = RODENT_SPP;
-
 int main(int argc, char** argv) {
     std::string out_file;
     size_t bench_iter = 0;
@@ -347,7 +345,7 @@ int main(int argc, char** argv) {
                 nimg_iter = strtoul(argv[++i], nullptr, 10);
             } else if (!strcmp(argv[i], "--spp")) {
                 check_arg(argc, argv, i, 1);
-                bench_iter = (size_t)std::ceil(strtoul(argv[++i], nullptr, 10) / (float)SPP_PER_ITERATION);
+                bench_iter = (size_t)std::ceil(strtoul(argv[++i], nullptr, 10) / (float)get_spp());
             } else if (!strcmp(argv[i], "--bench")) {
                 check_arg(argc, argv, i, 1);
                 bench_iter = strtoul(argv[++i], nullptr, 10);
