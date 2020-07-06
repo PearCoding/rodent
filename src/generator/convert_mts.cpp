@@ -457,15 +457,23 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
         os << "    let material_" << i << " : Shader = @ |ray, hit, surf| {\n";
         if(!mat.BSDF) {
             os << "        let bsdf = make_black_bsdf();\n";
-        } else if(mat.BSDF->pluginType() == "diffuse") {
+        } else if(mat.BSDF->pluginType() == "diffuse" ||
+            mat.BSDF->pluginType() == "roughdiffuse"/*TODO*/) {
             os << "        let bsdf = make_diffuse_bsdf(math, surf, " << extractMaterialPropertySpectral(mat.BSDF, "reflectance", info, ctx) << ");\n";
-        } else if(mat.BSDF->pluginType() == "dielectric") {
+        } else if(mat.BSDF->pluginType() == "dielectric" ||
+            mat.BSDF->pluginType() == "roughdielectric"/*TODO*/) {
             os << "        let bsdf = make_glass_bsdf(math, surf, " 
             << extractMaterialPropertyIOR(mat.BSDF, "ext_ior", info, ctx, 1.5046f) << ", " 
             << extractMaterialPropertyIOR(mat.BSDF, "int_ior", info, ctx, 1.000277f) << ", " 
             << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ", " 
             << extractMaterialPropertySpectral(mat.BSDF, "specular_transmittance", info, ctx, 1.0f) << ");\n";
-        } else {
+        } else if(mat.BSDF->pluginType() == "conductor" ||
+            mat.BSDF->pluginType() == "roughconductor"/*TODO*/) {
+            os << "        let bsdf = make_conductor_bsdf(math, surf, " 
+            << extractMaterialPropertySpectral(mat.BSDF, "eta", info, ctx, 0.63660f) << ", " 
+            << extractMaterialPropertySpectral(mat.BSDF, "k", info, ctx, 2.7834f) << ", " // TODO: Better defaults?
+            << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ");\n";
+        }else {
             warn("Unknown bsdf '", mat.BSDF->pluginType(), "'");
             os << "        let bsdf = make_black_bsdf();\n";
         }

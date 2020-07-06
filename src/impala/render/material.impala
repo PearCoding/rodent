@@ -74,6 +74,25 @@ fn @fresnel_factor(k: f32, cos_i: f32, cos_t: f32) -> f32 {
     (R_s * R_s + R_p * R_p) * 0.5f
 }
 
+fn @conductor_factor(n: f32, k: f32, cos_i: f32) -> f32 {
+    let f	 = n*n + k*k;
+    let d1	 = f * cos_i * cos_i;
+	let d2	 = 2.0f * n * cos_i;
+	let R_s  = (d1 - d2) / (d1 + d2);
+	let R_p  = (f - d2 + cos_i*cos_i) / (f + d2 + cos_i*cos_i);
+    (R_s * R_s + R_p * R_p) * 0.5f
+}
+
+fn @conductor_factor_v(n: SpectralWeight, k: SpectralWeight, cos_i: f32) -> SpectralWeight {
+    let f	 = spectral_weight_add(spectral_weight_mul(n,n), spectral_weight_mul(k,k));
+    let i2   = make_spectral_weight_splat(cos_i*cos_i);
+    let d1	 = spectral_weight_mul(f, i2);
+	let d2	 = spectral_weight_mulf(n, 2.0f * cos_i);
+	let R_s  = spectral_weight_div(spectral_weight_sub(d1,d2), spectral_weight_add(d1, d2));
+	let R_p  = spectral_weight_div(spectral_weight_add(spectral_weight_sub(f,d2), i2), spectral_weight_add(spectral_weight_add(f,d2), i2));
+    spectral_weight_mulf(spectral_weight_add(spectral_weight_mul(R_s,R_s), spectral_weight_mul(R_p,R_p)), 0.5f)
+}
+
 // Creates a material with no emission
 fn @make_material(bsdf: Bsdf) -> Material {
     Material {
@@ -202,6 +221,28 @@ fn @make_glass_bsdf(math: Intrinsics, surf: SurfaceElement, n1: RefractiveIndex,
             make_bsdf_sample(surf, vec3_reflect(out_dir, n),
                 make_spectral_pdf_adp(1.0f, is_varying), 1.0f,
                 spectrum_eval_adp(ks, wvl, is_varying), false)
+        },
+        is_specular: true
+    }
+}
+
+// Creates a perfect conductor BSDF
+// The conductor BSDF is can be spectral varying
+fn @make_conductor_bsdf(math: Intrinsics, surf: SurfaceElement, n: Spectrum, k: Spectrum, ks: Spectrum) -> Bsdf {
+    Bsdf {
+        eval: @ |in_dir, out_dir, _| make_spectral_weight_zero(),
+        pdf:  @ |in_dir, out_dir, _| make_spectral_pdf_zero(),
+        sample: @ |rnd, out_dir, wvl, adjoint| {
+            let cn = spectrum_eval(n,wvl);
+            let ck = spectrum_eval(k,wvl);
+            let n = surf.local.col(2);
+            let cos_i = vec3_dot(out_dir, n);
+
+            let f = conductor_factor_v(cn, ck, cos_i);
+
+            let pdf = make_spectral_pdf_splat(1.0f);
+            let color = spectral_weight_mul(spectrum_eval(ks, wvl), f);
+            make_bsdf_sample(surf, vec3_reflect(out_dir, n), pdf, 1.0f, color, false)
         },
         is_specular: true
     }

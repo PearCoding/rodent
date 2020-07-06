@@ -121,12 +121,24 @@ fn @make_spectral_weight_one() -> SpectralWeight {
     make_spectral_weight(1.0f, 1.0f, 1.0f, 1.0f)
 }
 
+fn @make_spectral_weight_splat(f: f32) -> SpectralWeight {
+    make_spectral_weight(f, f, f, f)
+}
+
 fn @spectral_weight_add(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
     make_spectral_weight(a.hero + b.hero, a.s1 + b.s1, a.s2 + b.s2, a.s3 + b.s3)
 }
 
+fn @spectral_weight_sub(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
+    make_spectral_weight(a.hero - b.hero, a.s1 - b.s1, a.s2 - b.s2, a.s3 - b.s3)
+}
+
 fn @spectral_weight_mul(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
     make_spectral_weight(a.hero * b.hero, a.s1 * b.s1, a.s2 * b.s2, a.s3 * b.s3)
+}
+
+fn @spectral_weight_div(a: SpectralWeight, b: SpectralWeight) -> SpectralWeight {
+    make_spectral_weight(a.hero / b.hero, a.s1 / b.s1, a.s2 / b.s2, a.s3 / b.s3)
 }
 
 fn @spectral_weight_mulf(s: SpectralWeight, f: f32) -> SpectralWeight {
