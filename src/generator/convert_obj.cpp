@@ -517,11 +517,8 @@ bool convert_obj(const std::string &file_name, Target target,
         }
         else if (mat.illum == 7)
         {
-            if (mat.ni >= 1.50f && mat.ni <= 1.60f) // TODO?
-                os << "        let refrac_index =  make_bk7_refractive_index(math);\n";
-            else
-                os << "        let refrac_index =  make_const_refractive_index(" << mat.ni << "f);\n";
-            os << "        let bsdf = make_glass_bsdf(math, surf, make_const_refractive_index(1.0f), refrac_index, "
+            os << "        let refrac_index =  make_const_refractive_index(" << mat.ni << "f);\n"
+               << "        let bsdf = make_glass_bsdf(math, surf, make_const_refractive_index(1.0f), refrac_index, "
                << "make_coeff_spectrum(math, " << escape_f32(cks.x) << ", " << escape_f32(cks.y) << ", " << escape_f32(cks.z) << "), make_coeff_spectrum(math, " << escape_f32(ctf.x) << ", " << escape_f32(ctf.y) << ", " << escape_f32(ctf.z) << "));\n";
         }
         else

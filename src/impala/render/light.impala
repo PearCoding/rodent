@@ -123,6 +123,24 @@ fn @make_point_light(math: Intrinsics, pos: Vec3, color: Spectrum) -> Light {
     }
 }
 
+fn @make_camera_light(math: Intrinsics, camera: Camera, color: Spectrum) -> Light {
+    Light {
+        sample_direct: @ |rnd, from| {
+            let intensity = spectrum_mulf(color, 1.0f / (4.0f * flt_pi));
+            make_direct_sample(camera.origin(), intensity, 1.0f, uniform_sphere_pdf(), 1.0f)
+        },
+        sample_emission: @ |rnd| {
+            let u = randf(rnd);
+            let v = randf(rnd);
+            let sample = sample_uniform_sphere(math, u, v);
+            let intensity = spectrum_mulf(color, 1.0f / (4.0f * flt_pi));
+            make_emission_sample(camera.origin(), sample.dir, intensity, 1.0f, sample.pdf, 1.0f)
+        },
+        emission: @ |_, _| make_emission_value(make_spectrum_none(), 1.0f, 1.0f),
+        has_area: false
+    }
+}
+
 fn @make_area_light(math: Intrinsics, area: AreaEmitter, color: Spectrum) -> Light {
     Light {
         sample_direct: @ |rnd, from| {

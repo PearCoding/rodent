@@ -24,6 +24,10 @@ fn @make_varying_refractive_index(n: fn(f32) -> f32) -> RefractiveIndex {
     }
 }
 
+fn @make_spectral_refractive_index(s: Spectrum) -> RefractiveIndex {
+    make_varying_refractive_index(@|wvl| s.value(wvl))
+}
+
 // https://refractiveindex.info/?shelf=glass&book=BK7&page=HIKARI
 fn @make_bk7_refractive_index(math: Intrinsics) -> RefractiveIndex {
     make_varying_refractive_index(@|wvl| {

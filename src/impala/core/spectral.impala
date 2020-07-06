@@ -173,12 +173,16 @@ fn @make_spectrum(func: fn(f32) -> f32) -> Spectrum {
     }
 }
 
+fn @make_spectrum_const(v : f32) -> Spectrum {
+    make_spectrum(@|_| { v })
+}
+
 fn @make_spectrum_none() -> Spectrum {
-    make_spectrum(@|_| { 0.0f })
+    make_spectrum_const(0.0f)
 }
 
 fn @make_spectrum_identity() -> Spectrum {
-    make_spectrum(@|_| { 1.0f })
+    make_spectrum_const(1.0f)
 }
 
 fn @spectrum_add(a: Spectrum, b: Spectrum) -> Spectrum {
