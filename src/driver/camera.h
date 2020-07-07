@@ -11,7 +11,7 @@ struct Camera {
     float3 up;
     float w, h;
 
-    Camera(const float3& e, const float3& d, const float3& u, float fov, float ratio) {
+    inline Camera(const float3& e, const float3& d, const float3& u, float fov, float ratio) {
         eye = e;
         dir = normalize(d);
         right = normalize(cross(dir, u));
@@ -21,7 +21,7 @@ struct Camera {
         h = w / ratio;
     }
 
-    void rotate(float yaw, float pitch) {
+    inline void rotate(float yaw, float pitch) {
         dir = ::rotate(dir, right,  -pitch);
         dir = ::rotate(dir, up,     -yaw);
         dir = normalize(dir);
@@ -29,7 +29,18 @@ struct Camera {
         up = normalize(cross(right, dir));
     }
 
-    void move(float x, float y, float z) {
+    inline void roll(float angle) {
+        right = ::rotate(right, dir, angle);
+        up = ::rotate(up, dir, angle);
+    }
+
+    inline void update_dir(const float3& ndir, const float3& nup) {
+        dir = ndir;
+        right = normalize(cross(dir, nup));
+        up = normalize(cross(right, dir));
+    }
+
+    inline void move(float x, float y, float z) {
         eye += right * x + up * y + dir * z;
     }
 };

@@ -21,41 +21,71 @@ static std::vector<uint32_t> sBuffer;
 static int sWidth;
 static int sHeight;
 
+// Stats
+static float sStats_MaxLum = 0.0f;
+static float sStats_MinLum = std::numeric_limits<float>::infinity();
+static float sStats_AvgLum = 0.0f;
+static float3 sLastCameraEye = float3(0,0,0);
+static float3 sLastCameraDir = float3(0,0,0);
+static float3 sLastCameraUp  = float3(0,0,0);
+
+static bool sToneMapping_Automatic = true;
+static float sToneMapping_Exposure = 1.0f;
+static float sToneMapping_Offset   = 0.0f;
+
 // Interface
 float* get_pixels();
 
 static bool handle_events(uint32_t& iter, Camera& cam) {
+    ImGuiIO& io = ImGui::GetIO();
+    
     static bool camera_on = false;
-    static bool arrows[4] = { false, false, false, false };
+    static bool arrows[6] = { false, false, false, false, false, false };
     static bool speed[2] = { false, false };
     const float rspeed = 0.005f;
     static float tspeed = 0.1f;
 
     SDL_Event event;
-	int wheel = 0;
-    bool hover = ImGui::IsAnyItemHovered() || ImGui::IsAnyWindowHovered();
+    const bool hover = ImGui::IsAnyItemHovered() || ImGui::IsAnyWindowHovered();
     while (SDL_PollEvent(&event)) {    
         bool key_down = event.type == SDL_KEYDOWN;
         switch (event.type) {
+            case SDL_TEXTINPUT:
+                    io.AddInputCharactersUTF8(event.text.text);
+                break;
             case SDL_KEYUP:
-            case SDL_KEYDOWN:
-                switch (event.key.keysym.sym) {
-                    case SDLK_ESCAPE:   return true;
-                    case SDLK_KP_PLUS:  speed[0] = key_down; break;
-                    case SDLK_KP_MINUS: speed[1] = key_down; break;
-                    case SDLK_UP:       arrows[0] = key_down; break;
-                    case SDLK_w:        arrows[0] = key_down; break;
-                    case SDLK_DOWN:     arrows[1] = key_down; break;
-                    case SDLK_s:        arrows[1] = key_down; break;
-                    case SDLK_LEFT:     arrows[2] = key_down; break;
-                    case SDLK_a:        arrows[2] = key_down; break;
-                    case SDLK_RIGHT:    arrows[3] = key_down; break;
-                    case SDLK_d:        arrows[3] = key_down; break;
-                    case SDLK_c:
-                        info("Camera Eye: ", cam.eye.x, " ", cam.eye.y, " ", cam.eye.z );
-                        info("Camera Dir: ", cam.dir.x, " ", cam.dir.y, " ", cam.dir.z);
-                        info("Camera Up:  ", cam.up.x, " ", cam.up.y, " ", cam.up.z);
-                        break;
+            case SDL_KEYDOWN: {
+                    int key = event.key.keysym.scancode;
+                    IM_ASSERT(key >= 0 && key < IM_ARRAYSIZE(io.KeysDown));
+                    io.KeysDown[key] = (event.type == SDL_KEYDOWN);
+                    io.KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
+                    io.KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
+                    io.KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
+            #ifdef _WIN32
+                    io.KeySuper = false;
+            #else
+                    io.KeySuper = ((SDL_GetModState() & KMOD_GUI) != 0);
+            #endif
+            
+                    const bool sign = io.KeyShift ? -1 : 1;
+                    switch (event.key.keysym.sym) {
+                        case SDLK_ESCAPE:   return true;
+                        case SDLK_KP_PLUS:  speed[0] = key_down; break;
+                        case SDLK_KP_MINUS: speed[1] = key_down; break;
+                        case SDLK_UP:       arrows[0] = key_down; break;
+                        case SDLK_w:        arrows[0] = key_down; break;
+                        case SDLK_DOWN:     arrows[1] = key_down; break;
+                        case SDLK_s:        arrows[1] = key_down; break;
+                        case SDLK_LEFT:     arrows[2] = key_down; break;
+                        case SDLK_a:        arrows[2] = key_down; break;
+                        case SDLK_RIGHT:    arrows[3] = key_down; break;
+                        case SDLK_d:        arrows[3] = key_down; break;
+                        case SDLK_e:        arrows[4] = key_down; break;
+                        case SDLK_q:        arrows[5] = key_down; break;
+                        case SDLK_KP_1:     cam.update_dir(sign*float3(0,0,1), float3(0,1,0)); iter = 0; break;
+                        case SDLK_KP_3:     cam.update_dir(sign*float3(1,0,0), float3(0,1,0)); iter = 0; break;
+                        case SDLK_KP_7:     cam.update_dir(sign*float3(0,1,0), float3(0,0,1)); iter = 0; break;
+                    }
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
@@ -65,10 +95,8 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT && !hover) {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                    camera_on = false;
-                }
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+                camera_on = false;
                 break;
             case SDL_MOUSEMOTION:
                 if (camera_on && !hover) {
@@ -77,7 +105,10 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                 }
                 break;
             case SDL_MOUSEWHEEL:
-				wheel = event.wheel.y;
+                if (event.wheel.x > 0) io.MouseWheelH += 1;
+                if (event.wheel.x < 0) io.MouseWheelH -= 1;
+                if (event.wheel.y > 0) io.MouseWheel += 1;
+                if (event.wheel.y < 0) io.MouseWheel -= 1;
                 break;
             case SDL_QUIT:
                 return true;
@@ -90,20 +121,25 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
     const int buttons = SDL_GetMouseState(&mouseX, &mouseY);
 
     // Setup low-level inputs (e.g. on Win32, GetKeyboardState(), or write to those fields from your Windows message loop handlers, etc.)
-    ImGuiIO& io = ImGui::GetIO();
     io.DeltaTime = 1.0f / 60.0f;
     io.MousePos = ImVec2(static_cast<float>(mouseX), static_cast<float>(mouseY));
     io.MouseDown[0] = buttons & SDL_BUTTON(SDL_BUTTON_LEFT);
     io.MouseDown[1] = buttons & SDL_BUTTON(SDL_BUTTON_RIGHT);
-    io.MouseWheel = static_cast<float>(wheel);
 
     if (arrows[0]) cam.move(0, 0,  tspeed);
     if (arrows[1]) cam.move(0, 0, -tspeed);
     if (arrows[2]) cam.move(-tspeed, 0, 0);
     if (arrows[3]) cam.move( tspeed, 0, 0);
-    if (arrows[0] | arrows[1] | arrows[2] | arrows[3]) iter = 0;
+    if (arrows[4]) cam.roll(rspeed*10);
+    if (arrows[5]) cam.roll(-rspeed*10);
+    if (arrows[0] | arrows[1] | arrows[2] | arrows[3] | arrows[4] | arrows[5]) iter = 0;
     if (speed[0]) tspeed *= 1.1f;
     if (speed[1]) tspeed *= 0.9f;
+
+    sLastCameraEye = cam.eye;
+    sLastCameraDir = cam.dir;
+    sLastCameraUp  = cam.up;
+
     return false;
 }
 
@@ -190,13 +226,21 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
     auto inv_iter = 1.0f / iter;
     auto inv_gamma = 1.0f / 2.2f;
     
-    float max_luminance = estimateLuminance(width, height);
+    sStats_MaxLum = 0.0f;
+    sStats_MinLum = std::numeric_limits<float>::infinity();
+    sStats_AvgLum = 0.0f;
+    const float avgFactor = 1.0f/(width*height);
+    
+    const float exposure_factor = std::pow(2.0, sToneMapping_Exposure);
+    float max_luminance = 0.0f;
+    if(sToneMapping_Automatic)
+        max_luminance = estimateLuminance(width, height) * inv_iter;
 
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
-            auto r = film[(y * width + x) * 3 + 0];
-            auto g = film[(y * width + x) * 3 + 1];
-            auto b = film[(y * width + x) * 3 + 2];
+            auto r = film[(y * width + x) * 3 + 0] * inv_iter;
+            auto g = film[(y * width + x) * 3 + 1] * inv_iter;
+            auto b = film[(y * width + x) * 3 + 2] * inv_iter;
 
             const auto xyY = srgb_to_xyY(rgb(r,g,b));
 #ifdef CULL_BAD_COLOR
@@ -218,14 +262,24 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
             }
 #endif
 
-            //const float L = xyY.z / (9.6f * avg_luminance);
-            const float L = xyY.z / max_luminance;
-            const auto c = xyY_to_srgb(rgb(xyY.x, xyY.y, reinhard_modified(L)));
+            sStats_MaxLum = std::max(sStats_MaxLum, xyY.z);
+            sStats_MinLum = std::min(sStats_MinLum, xyY.z);
+            sStats_AvgLum += xyY.z * avgFactor;
+
+            rgb color;
+            if(sToneMapping_Automatic) {
+                const float L = xyY.z / max_luminance;
+                color = xyY_to_srgb(rgb(xyY.x, xyY.y, reinhard_modified(L)));
+            } else {
+                color = rgb(exposure_factor * r + sToneMapping_Offset,
+                            exposure_factor * g + sToneMapping_Offset,
+                            exposure_factor * b + sToneMapping_Offset);
+            }
 
             buf[y * width + x] =
-                (uint32_t(clamp(std::pow(c.x, inv_gamma), 0.0f, 1.0f) * 255.0f) << 16) |
-                (uint32_t(clamp(std::pow(c.y, inv_gamma), 0.0f, 1.0f) * 255.0f) << 8)  |
-                 uint32_t(clamp(std::pow(c.z, inv_gamma), 0.0f, 1.0f) * 255.0f);
+                (uint32_t(clamp(std::pow(color.x, inv_gamma), 0.0f, 1.0f) * 255.0f) << 16) |
+                (uint32_t(clamp(std::pow(color.y, inv_gamma), 0.0f, 1.0f) * 255.0f) << 8)  |
+                 uint32_t(clamp(std::pow(color.z, inv_gamma), 0.0f, 1.0f) * 255.0f);
         }
     }
     SDL_UpdateTexture(texture, nullptr, buf, width * sizeof(uint32_t));
@@ -284,15 +338,30 @@ bool rodent_ui_handleinput(uint32_t& iter, Camera& cam) {
     return handle_events(iter, cam);
 }
 
+constexpr size_t UI_W = 300;
+constexpr size_t UI_STAT_H = 180;
 static void handle_imgui(uint32_t iter) {
+    ImGui::SetNextWindowPos(ImVec2(5,5), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(UI_W,UI_STAT_H), ImGuiCond_Once);
     ImGui::Begin("Stats");
     ImGui::Text("Iter %i", iter);
     ImGui::Text("SPP %i", iter*get_spp());
+    ImGui::Text("Max Lum %f", sStats_MaxLum);
+    ImGui::Text("Min Lum %f", sStats_MinLum);
+    ImGui::Text("Avg Lum %f", sStats_AvgLum);
+    ImGui::Text("Cam Eye (%f, %f, %f)", sLastCameraEye.x, sLastCameraEye.y, sLastCameraEye.z);
+    ImGui::Text("Cam Dir (%f, %f, %f)", sLastCameraDir.x, sLastCameraDir.y, sLastCameraDir.z);
+    ImGui::Text("Cam Up  (%f, %f, %f)", sLastCameraUp.x, sLastCameraUp.y, sLastCameraUp.z);
     ImGui::End();
 
-    float f;
+    ImGui::SetNextWindowPos(ImVec2(5,5 + UI_STAT_H), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(UI_W,100), ImGuiCond_Once);
     ImGui::Begin("ToneMapping");
-    ImGui::SliderFloat("Exposure", &f, 0.0f, 1.0f);
+    ImGui::Checkbox("Automatic", &sToneMapping_Automatic);
+    if(!sToneMapping_Automatic) {
+        ImGui::SliderFloat("Exposure", &sToneMapping_Exposure, 0.01f, 10.0f);
+        ImGui::SliderFloat("Offset", &sToneMapping_Offset, 0.0f, 10.0f);
+    }
     ImGui::End();
 }
 
