@@ -387,13 +387,25 @@ bool load_mtl(const FilePath& path, obj::MaterialLib& mtl_lib) {
 static void compute_face_normals(const std::vector<uint32_t>& indices,
                                  const std::vector<float3>& vertices,
                                  std::vector<float3>& face_normals,
+                                 std::vector<float>& face_area,
                                  size_t first_index) {
+    bool hasBadArea = false;
     for (auto i = first_index, k = indices.size(); i < k; i += 4) {
         const float3& v0 = vertices[indices[i + 0]];
         const float3& v1 = vertices[indices[i + 1]];
         const float3& v2 = vertices[indices[i + 2]];
-        face_normals[i / 4] = normalize(cross(v1 - v0, v2 - v0));
+        const float3 N   = cross(v1 - v0, v2 - v0);
+        float lN   = length(N);
+        if(lN < 0.00000001f) {
+            lN = 1.0f;
+            hasBadArea = true;
+        }
+        face_normals[i / 4] = N / lN;
+        face_area[i / 4] = 0.5f * lN;
     }
+
+    if(hasBadArea)
+        warn("Triangle mesh contains triangles with zero area");
 }
 
 static void compute_vertex_normals(const std::vector<uint32_t>& indices,
@@ -493,7 +505,8 @@ TriMesh compute_tri_mesh(const File& obj_file, size_t mtl_offset) {
 
         // Compute the geometric normals for this mesh
         tri_mesh.face_normals.resize(tri_mesh.face_normals.size() + triangles.size());
-        compute_face_normals(tri_mesh.indices, tri_mesh.vertices, tri_mesh.face_normals, idx_offset);
+        tri_mesh.face_area.resize(tri_mesh.face_area.size() + triangles.size());
+        compute_face_normals(tri_mesh.indices, tri_mesh.vertices, tri_mesh.face_normals, tri_mesh.face_area, idx_offset);
 
         if (has_normals) {
             // Set up mesh normals
@@ -526,6 +539,7 @@ void combine_into_tri_mesh(TriMesh& dst, const TriMesh& src) {
     dst.normals.insert(dst.normals.end(),  src.normals.begin(), src.normals.end());
     dst.texcoords.insert(dst.texcoords.end(),  src.texcoords.begin(), src.texcoords.end());
     dst.face_normals.insert(dst.face_normals.end(),  src.face_normals.begin(), src.face_normals.end());
+    dst.face_area.insert(dst.face_area.end(),  src.face_area.begin(), src.face_area.end());
     
     dst.indices.resize(idx_offset + src.indices.size());
     for(size_t i = 0; i < src.indices.size(); i += 4) {

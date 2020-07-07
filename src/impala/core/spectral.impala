@@ -156,6 +156,10 @@ fn @spectral_weight_sum(a: SpectralWeight) -> f32 {
     a.hero + a.s1 + a.s2 + a.s3
 }
 
+fn @spectral_weight_foreach(a: SpectralWeight, f: fn(f32) -> f32) -> SpectralWeight {
+    make_spectral_weight(f(a.hero), f(a.s1), f(a.s2), f(a.s3))
+}
+
 fn @spectral_weight_approx_luminance(a: SpectralWeight) -> f32 {
     let n = spectral_weight_sum(a);
     safe_div(max_4_f32(a.hero, a.s1, a.s2, a.s3), n)
@@ -244,4 +248,20 @@ fn @make_coeff_spectrum(math: Intrinsics, cA: f32, cB: f32, cC: f32) -> Spectrum
 
 fn @make_coeff_spectrum_v(math: Intrinsics, v: Vec3) -> Spectrum {
     make_coeff_spectrum(math, v.x, v.y, v.z)
+}
+
+fn @make_data_spectrum(math: Intrinsics, wvls: &[f32], weights: &[f32], size: i32) -> Spectrum {
+    if size == 0 {
+        make_spectrum_none()
+    } else if size == 1 {
+        make_spectrum_const(weights(0))
+    } else {
+        make_spectrum(@|wvl| {
+            let idx = binary_search(@|i| wvl < wvls(i), size);
+            let awvl = wvls(idx);
+            let bwvl = wvls(idx + 1);
+            let t = (wvl - awvl) / (bwvl - awvl);
+            weights(idx)*(1.0f-t) + weights(idx + 1)*t
+        })
+    }
 }

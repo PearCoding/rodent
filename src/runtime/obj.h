@@ -63,6 +63,7 @@ struct TriMesh {
     std::vector<uint32_t> indices;
     std::vector<float3>   normals;
     std::vector<float3>   face_normals;
+    std::vector<float>    face_area;
     std::vector<float2>   texcoords;
 };
 

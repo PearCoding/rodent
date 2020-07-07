@@ -33,12 +33,13 @@ struct LoadInfo {
 };
 
 struct Material {
+    uint32_t MeshId = 0;
     std::shared_ptr<Object> BSDF;
     std::shared_ptr<Object> Light;
 };
 
 inline bool operator==(const Material& a, const Material& b) {
-    return a.BSDF == b.BSDF && a.Light == b.Light;
+    return a.MeshId == b.MeshId && a.BSDF == b.BSDF && a.Light == b.Light;
 }
 
 class MaterialHash {
@@ -46,13 +47,16 @@ public:
     size_t operator()(const Material &s) const {
         size_t h1 = std::hash<decltype(s.BSDF)>()(s.BSDF);
         size_t h2 = std::hash<decltype(s.Light)>()(s.Light);
-        return h1 ^ (h2 << 1);
+        size_t h3 = std::hash<decltype(s.MeshId)>()(s.MeshId);
+        return (h1 ^ (h2 << 1)) ^ (h3 << 1);
     }
 };
 
 struct Shape {
     size_t VtxOffset;
     size_t ItxOffset;
+    size_t VtxCount;
+    size_t ItxCount;
     ::Material Material;
 };
 
@@ -61,6 +65,8 @@ struct GenContext {
     std::vector<Material> Materials;
     std::unordered_set<std::shared_ptr<Object>> Textures;
     obj::TriMesh Mesh;
+    BBox SceneBBox;
+    float SceneDiameter = 0.0f;
 };
 
 inline bool is_simple_brdf(const std::string &brdf)
@@ -83,8 +89,8 @@ inline void setup_integrator(const Object &obj, const LoadInfo& info, std::ostre
     }
 
     warn("No known integrator specified, therefore using path tracer");
-    //os << "    let renderer = make_path_tracing_renderer(" << info.MaxPathLen << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
-    os << "     let renderer = make_debug_renderer();\n";
+    os << "    let renderer = make_path_tracing_renderer(" << info.MaxPathLen << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
+    //os << "     let renderer = make_debug_renderer();\n";
 }
 
 inline void setup_camera(const Object &obj, const LoadInfo& info, std::ostream &os)
@@ -236,13 +242,17 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
         Shape shape;
         shape.VtxOffset = ctx.Mesh.vertices.size();
         shape.ItxOffset = ctx.Mesh.indices.size();
+        shape.VtxCount  = child_mesh.vertices.size();
+        shape.ItxCount  = child_mesh.indices.size();
         
         // Setup material & light
         for(const auto& inner_child : child->anonymousChildren()) {
             if(inner_child->type() == OT_BSDF)
                 shape.Material.BSDF = add_bsdf(inner_child, ctx);
-            else if(inner_child->type() == OT_EMITTER)
+            else if(inner_child->type() == OT_EMITTER) {
                 shape.Material.Light = add_light(inner_child, ctx);
+                shape.Material.MeshId = ctx.Shapes.size();
+            }
         }
 
         if(!unique_mats.count(shape.Material)) {
@@ -265,12 +275,14 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
        << "    let vertices     = device.load_buffer(\"data/vertices.bin\");\n"
        << "    let normals      = device.load_buffer(\"data/normals.bin\");\n"
        << "    let face_normals = device.load_buffer(\"data/face_normals.bin\");\n"
+       << "    let face_area    = device.load_buffer(\"data/face_area.bin\");\n"
        << "    let indices      = device.load_buffer(\"data/indices.bin\");\n"
        << "    let texcoords    = device.load_buffer(\"data/texcoords.bin\");\n"
        << "    let tri_mesh     = TriMesh {\n"
        << "        vertices:     @ |i| vertices.load_vec3(i),\n"
        << "        normals:      @ |i| normals.load_vec3(i),\n"
        << "        face_normals: @ |i| face_normals.load_vec3(i),\n"
+       << "        face_area:    @ |i| face_area.load_f32(i),\n"
        << "        triangles:    @ |i| { let (i, j, k, _) = indices.load_int4(i); (i, j, k) },\n"
        << "        attrs:        @ |_| (false, @ |j| vec2_to_4(texcoords.load_vec2(j), 0.0f, 0.0f)),\n"
        << "        num_attrs:    1,\n"
@@ -324,6 +336,12 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
     {
         ::info("Reusing existing BVH for '", info.Filename, "'");
     }
+
+    // Calculate scene bounding box
+    ctx.SceneBBox = BBox::empty();
+    for(size_t i = 0; i < ctx.Mesh.vertices.size(); ++i)
+        ctx.SceneBBox.extend(ctx.Mesh.vertices[i]);
+    ctx.SceneDiameter = length(ctx.SceneBBox.max - ctx.SceneBBox.min);
 }
 
 static void setup_textures(const Object& elem, const LoadInfo& info, const GenContext& ctx, std::ostream &os) {
@@ -376,7 +394,19 @@ static std::string extractMaterialPropertySpectral(const std::shared_ptr<Object>
         } break;
         case PT_SPECTRUM: {
             auto spec = prop.getSpectrum();
-            // TODO
+            if(spec.isUniform()) {
+                sstream << "make_spectrum_const(" << escape_f32(spec.uniformValue()) << ")";
+            } else {
+                sstream << "{ "; 
+                sstream << "let wvls = [";
+                for(size_t i = 0; i < spec.wavelengths().size(); ++i)
+                    sstream << escape_f32(spec.wavelengths()[i]) << ",";
+                sstream << "]; let weights = [";
+                for(size_t i = 0; i < spec.weights().size(); ++i)
+                    sstream << escape_f32(spec.weights()[i]) << ",";
+                sstream << "]; make_data_spectrum(math, wvls, weights, " << spec.weights().size() << ")";
+                sstream << "}";
+            }
         } break;
         case PT_BLACKBODY: {
             auto blk = prop.getBlackbody();
@@ -432,6 +462,37 @@ static std::string extractMaterialPropertyIOR(const std::shared_ptr<Object>& obj
     return sstream.str();
 }
 
+static std::string extractMaterialPropertyIllum(const std::shared_ptr<Object>& obj, const std::string& name, const LoadInfo& info, const GenContext& ctx, float def = 0.0f) {
+    std::stringstream sstream;
+
+    auto prop = obj->property(name);
+        switch(prop.type()) {
+        case PT_INTEGER:
+            sstream << "make_d65_illum(" << escape_f32(prop.getInteger()) << ")";
+            break;
+        case PT_NUMBER:
+            sstream << "make_d65_illum(" << escape_f32(prop.getNumber()) << ")";
+            break;
+        case PT_RGB: {
+            auto v_rgb = prop.getRGB();
+            if(v_rgb.r > 1 || v_rgb.g > 1 || v_rgb.b > 1) {
+                rgb r_rgb;
+                float power;
+                info.Upsampler->upsample_emissive_rgb(rgb(v_rgb.r,v_rgb.g,v_rgb.b), r_rgb, power);
+                sstream << "make_colored_d65_illum(" << escape_f32(power) << ", make_coeff_spectrum(math, " << escape_f32(r_rgb.x) << ", " << escape_f32(r_rgb.y) << ", " << escape_f32(r_rgb.z) << "))";
+
+            } else {
+                auto r_rgb = info.Upsampler->upsample_rgb(rgb(v_rgb.r,v_rgb.g,v_rgb.b));
+                sstream << "make_colored_d65_illum(1.0f, make_coeff_spectrum(math, " << escape_f32(r_rgb.x) << ", " << escape_f32(r_rgb.y) << ", " << escape_f32(r_rgb.z) << "))";
+            }
+        } break;
+        default:
+            return extractMaterialPropertySpectral(obj, name, info, ctx, def);
+        }
+
+    return sstream.str();
+}
+
 static void setup_materials(const Object& elem, const LoadInfo& info, const GenContext& ctx, std::ostream &os) {
     if(ctx.Materials.empty())
         return;
@@ -443,8 +504,10 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
         if(!mat.Light)
             continue;
 
-        // TODO
-        os << "    let light_" << light_counter << " = make_point_light(math, make_vec3(0.0f,0.0f,0.0f), " << extractMaterialPropertySpectral(mat.Light, "radiance", info, ctx) << ");\n";
+        const auto& shape = ctx.Shapes[mat.MeshId];
+        os << "    let light_" << light_counter << " = make_trimesh_light(math, tri_mesh, "
+            << (shape.ItxOffset/4) << ", " << (shape.ItxCount/4) << ", "
+            << extractMaterialPropertyIllum(mat.Light, "radiance", info, ctx) << ");\n";
         ++light_counter;
     }
 
@@ -489,6 +552,67 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
     }
 }
 
+static size_t setup_lights(const Object& elem, const LoadInfo& info, const GenContext& ctx, std::ostream &os) {
+    ::info("Generating lights for '", info.Filename, "'");
+    size_t light_count = 0;
+    // Make sure area lights are the first ones
+    for(const auto& m: ctx.Materials) {
+        if(m.Light)
+            ++light_count;
+    }
+
+    for(const auto& child : elem.anonymousChildren()) {
+        if(child->type() != OT_EMITTER)
+            continue;
+
+        if(child->pluginType() == "point") {
+            auto pos = child->property("position").getVector();
+            os << "    let light_" << light_count << " = make_point_light(math, make_vec3(" 
+                    << escape_f32(pos.x) << ", " << escape_f32(pos.y) << ", " << escape_f32(pos.z) << "), " 
+                    << extractMaterialPropertyIllum(child, "intensity", info, ctx, 1.0f) << ");\n";
+        } else if(child->pluginType() == "area") {
+            warn("Area emitter without a shape is not allowed");
+            continue;
+        } else if(child->pluginType() == "directional") {// TODO: By to_world?
+            auto dir = child->property("direction").getVector();
+            os << "    let light_" << light_count << " = make_directional_light(math, make_vec3(" 
+                    << escape_f32(dir.x) << ", " << escape_f32(dir.y) << ", " << escape_f32(dir.z) << "), " 
+                    << escape_f32(ctx.SceneDiameter) << ", "
+                    << extractMaterialPropertyIllum(child, "irradiance", info, ctx, 1.0f) << ");\n";
+        } else if(child->pluginType() == "sun") {// TODO
+            warn("Sun emitter is approximated by directional light");
+            auto dir = child->property("sun_direction").getVector();
+            auto power = child->property("scale").getNumber(1.0f);
+            os << "    let light_" << light_count << " = make_directional_light(math, make_vec3(" 
+                    << escape_f32(dir.x) << ", " << escape_f32(dir.y) << ", " << escape_f32(dir.z) << "), "  
+                    << escape_f32(ctx.SceneDiameter) << ", "
+                    << "make_d65_illum(" << escape_f32(power) << "));\n";
+        } else {
+            warn("Unknown emitter type '", child->pluginType(), "'");
+            continue;
+        }
+
+        ++light_count;
+    }
+
+
+    os << "\n    // Lights\n";
+    if(light_count == 0) { // Camera light
+        os << "    let lights = @ |_| make_camera_light(math, camera, make_spectrum_identity());\n";
+    }else{
+        os << "    let lights = @ |i| match i {\n";
+        for(size_t i = 0; i < light_count; ++i) {
+        if (i == light_count - 1)
+            os << "        _ => light_" << i << "\n";
+        else
+            os << "        " << i << " => light_" << i << ",\n";
+        }
+        os << "    };\n";
+    }
+
+    return light_count;
+}
+
 static void convert_scene(const Scene &scene, const LoadInfo& info, std::ostream &os)
 {
     GenContext ctx;
@@ -498,31 +622,7 @@ static void convert_scene(const Scene &scene, const LoadInfo& info, std::ostream
     setup_shapes(scene, info, ctx, os);
     setup_textures(scene, info, ctx, os);
     setup_materials(scene, info, ctx, os);
-
-    size_t light_count = 0;
-    for(const auto& m: ctx.Materials) {
-        if(m.Light)
-            ++light_count;
-    }
-
-    os << "\n    // Lights\n";
-    if(light_count == 0) { // Camera light
-        os << "    let lights = @ |_| make_camera_light(math, camera, make_spectrum_identity());\n";
-    }else{
-        os << "    let lights = @ |i| match i {\n";
-        size_t light_count2 = 0;
-        for(const auto& m: ctx.Materials) {
-            if(!m.Light)
-                continue;
-
-            if (light_count2 == light_count - 1)
-                os << "        _ => light_" << light_count2 << "\n";
-            else
-                os << "        " << light_count2 << " => light_" << light_count2 << ",\n";
-            ++light_count2;
-        }
-        os << "    };\n";
-    }
+    size_t light_count = setup_lights(scene, info, ctx, os);
     
     os << "\n    // Geometries\n"
        << "    let geometries = @ |i| match i {\n";

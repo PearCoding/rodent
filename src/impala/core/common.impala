@@ -179,3 +179,27 @@ fn @atanhf(math: Intrinsics, u: f32) -> f32 {
 fn @sechf(math: Intrinsics, u: f32) -> f32 {
     2.0f * math.expf(u)/(math.expf(2.0f * u) + 1.0f)
 }
+
+// TODO: Really partial evaluate?
+fn @binary_search(pred: fn(i32) -> bool, size: i32) -> i32 {
+    let mut len   = size;
+    let mut first = 0i32;
+
+    while len > 0 {
+        let mid  = first + len / 2;
+        if pred(mid) {
+            first = mid + 1;
+            len -= len / 2 + 1;
+        } else {
+            len = len / 2;
+        }
+    }
+
+    if first-1 > size-2 {
+        size - 2
+    } else if first == 0 {
+        0i32
+    } else {
+        first - 1
+    }
+}
