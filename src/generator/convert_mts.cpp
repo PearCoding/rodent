@@ -351,22 +351,22 @@ static void setup_textures(const Object& elem, const LoadInfo& info, const GenCo
     ::info("Generating images for '", info.Filename, "'");
     os << "\n    // Images\n";    
     for(const auto& tex: ctx.Textures) {
-        if(tex->pluginType() == "bitmap") {
-            std::string filename = tex->property("filename").getString();
-            if(filename.empty()) {
-                warn("Invalid texture found");
-                continue;
-            }
-            auto name = fix_file(filename);
-            auto c_name = export_image(info.Upsampler, info.Dir + "/" + name);
-            os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
-            os << "    let tex_" << make_id(name) << " = make_texture(math, make_repeat_border(), make_bilinear_filter(), image_" << make_id(name) << ");\n";
-        } else {
-            warn("Invalid texture type '", tex->pluginType(), "'");
+        if(tex->pluginType() != "bitmap")
+            continue;
+
+        std::string filename = tex->property("filename").getString();
+        if(filename.empty()) {
+            warn("Invalid texture found");
+            continue;
         }
+        auto name = fix_file(filename);
+        auto c_name = export_image(info.Upsampler, info.Dir + "/" + name);
+        os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
+        os << "    let tex_" << make_id(name) << " = make_texture(math, make_repeat_border(), make_bilinear_filter(), image_" << make_id(name) << ");\n";
     }
 }
 
+static std::string extractTexture(const std::shared_ptr<Object>& tex, const LoadInfo& info, const GenContext& ctx);
 static std::string extractMaterialPropertySpectral(const std::shared_ptr<Object>& obj, const std::string& name, const LoadInfo& info, const GenContext& ctx, float def = 0.0f) {
     std::stringstream sstream;
 
@@ -423,13 +423,7 @@ static std::string extractMaterialPropertySpectral(const std::shared_ptr<Object>
             sstream << "make_spectrum_const(" << escape_f32(def) << ")";
         } else {
             if(tex->type() == OT_TEXTURE) {
-                std::string filename = tex->property("filename").getString();
-                if(filename.empty()) {
-                    warn("Invalid texture found");
-                    sstream << "make_spectrum_none()";
-                } else {
-                    sstream << "tex_" << make_id(fix_file(filename)) << "(vec4_to_2(surf.attr(0)))";
-                }
+                sstream << extractTexture(tex, info, ctx);
             } else {
                 warn("Invalid child type");
                 sstream << "make_spectrum_none()";
@@ -490,6 +484,26 @@ static std::string extractMaterialPropertyIllum(const std::shared_ptr<Object>& o
             return extractMaterialPropertySpectral(obj, name, info, ctx, def);
         }
 
+    return sstream.str();
+}
+
+static std::string extractTexture(const std::shared_ptr<Object>& tex, const LoadInfo& info, const GenContext& ctx) {
+    std::stringstream sstream;
+    if(tex->pluginType() == "bitmap") {
+        std::string filename = tex->property("filename").getString();
+        if(filename.empty()) {
+            warn("Invalid texture found");
+            sstream << "make_spectrum_none()";
+        } else {
+            sstream << "tex_" << make_id(fix_file(filename)) << "(vec4_to_2(surf.attr(0)))";
+        }
+    } else if (tex->pluginType() == "checkerboard") {
+        sstream << "eval_checkerboard_texture(math, make_repeat_border(), " 
+            << extractMaterialPropertySpectral(tex, "color0", info, ctx, 0.4f) << ", " 
+            << extractMaterialPropertySpectral(tex, "color1", info, ctx, 0.2f) << ", vec4_to_2(surf.attr(0)))";
+    } else {
+        warn("Invalid texture type '", tex->pluginType(), "'");
+    }
     return sstream.str();
 }
 

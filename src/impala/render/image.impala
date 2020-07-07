@@ -89,3 +89,19 @@ fn @make_texture(math: Intrinsics, border: BorderHandling, filter: ImageFilter, 
         filter(math, image, make_vec2(u, v))
     }
 }
+
+fn @eval_checkerboard_texture(math: Intrinsics, border: BorderHandling, color0: Spectrum, color1: Spectrum, uv: Vec2) -> Spectrum {
+    let u = border.horz(math, uv.x);
+    let v = border.vert(math, uv.y);
+    let x = 2 *(((u * 2.0f) as i32) % 2) - 1;
+    let y = 2 *(((v * 2.0f) as i32) % 2) - 1;
+    if x*y == 1 {
+        color0
+    } else {
+        color1
+    }
+}
+
+fn @make_checkerboard_texture(math: Intrinsics, border: BorderHandling, color0: Spectrum, color1: Spectrum) -> Texture {
+    @ |uv| eval_checkerboard_texture(math, border, color0, color1, uv)
+}
