@@ -117,5 +117,24 @@ find_package(ImageMagick COMPONENTS compare QUIET)
 
 add_subdirectory(external/TinyParser-Mitsuba)
 
+if(NOT DISABLE_GUI)
+    add_library(imgui STATIC 
+        external/imgui/imgui.cpp
+        external/imgui/imgui.h
+        external/imgui/imgui_demo.cpp
+        external/imgui/imgui_draw.cpp
+        external/imgui/imgui_internal.h
+        external/imgui/imgui_widgets.cpp
+        external/imgui/imstb_rectpack.h
+        external/imgui/imstb_textedit.h
+        external/imgui/imstb_truetype.h
+        external/imgui/misc/cpp/imgui_stdlib.cpp
+        external/imgui/misc/cpp/imgui_stdlib.h
+        src/ui/imgui_sdl.cpp
+        src/ui/imgui_sdl.h)
+    target_include_directories(imgui PUBLIC external/imgui external/imgui external/imgui/misc/cpp src/ui ${SDL2_INCLUDE_DIR})
+    target_link_libraries(imgui PUBLIC ${SDL2_LIBRARIES})
+endif() 
+
 add_subdirectory(src)
 add_subdirectory(tools)

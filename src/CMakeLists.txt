@@ -50,9 +50,12 @@ list(TRANSFORM RODENT_SRCS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/" OUTPUT_VARIABL
 set(IMPALA_FILES ${IMPALA_FILES} PARENT_SCOPE)
 
 set(DRIVER_SRCS
+    driver/camera.h
     driver/driver.cpp
     driver/interface.cpp
-    driver/interface.h)
+    driver/interface.h
+    driver/ui.cpp
+    driver/ui.h)
 
 set(GENERATOR_SRCS
     generator/bvh.h
@@ -154,7 +157,7 @@ if (EMBREE_FOUND)
 endif()
 if (NOT DISABLE_GUI)
     target_include_directories(rodent_driver PUBLIC ${SDL2_INCLUDE_DIR})
-    target_link_libraries(rodent_driver PUBLIC ${SDL2_LIBRARY})
+    target_link_libraries(rodent_driver PUBLIC ${SDL2_LIBRARY} imgui)
 else()
     target_compile_definitions(rodent_driver PUBLIC -DDISABLE_GUI)
 endif()

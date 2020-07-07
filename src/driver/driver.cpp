@@ -8,12 +8,8 @@
 #include <array>
 
 #ifndef DISABLE_GUI
-#include <SDL.h>
+#include "ui.h"
 #endif
-
-#define CULL_BAD_COLOR
-#define CATCH_BAD_COLOR
-#define USE_MEDIAN_FOR_LUMINANCE_ESTIMATION
 
 #ifndef NDEBUG
 #include <fenv.h>
@@ -25,239 +21,16 @@
 #include "runtime/image.h"
 #include "runtime/color.h"
 
+#include "camera.h"
+
 #if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
 #include <x86intrin.h>
 #endif
-
-static constexpr float pi = 3.14159265359f;
-
-struct Camera {
-    float3 eye;
-    float3 dir;
-    float3 right;
-    float3 up;
-    float w, h;
-
-    Camera(const float3& e, const float3& d, const float3& u, float fov, float ratio) {
-        eye = e;
-        dir = normalize(d);
-        right = normalize(cross(dir, u));
-        up = normalize(cross(right, dir));
-
-        w = std::tan(fov * pi / 360.0f);
-        h = w / ratio;
-    }
-
-    void rotate(float yaw, float pitch) {
-        dir = ::rotate(dir, right,  -pitch);
-        dir = ::rotate(dir, up,     -yaw);
-        dir = normalize(dir);
-        right = normalize(cross(dir, up));
-        up = normalize(cross(right, dir));
-    }
-
-    void move(float x, float y, float z) {
-        eye += right * x + up * y + dir * z;
-    }
-};
 
 void setup_interface(size_t, size_t);
 float* get_pixels();
 void clear_pixels();
 void cleanup_interface();
-
-#ifndef DISABLE_GUI
-static bool handle_events(uint32_t& iter, Camera& cam) {
-    static bool camera_on = false;
-    static bool arrows[4] = { false, false, false, false };
-    static bool speed[2] = { false, false };
-    const float rspeed = 0.005f;
-    static float tspeed = 0.1f;
-
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        bool key_down = event.type == SDL_KEYDOWN;
-        switch (event.type) {
-            case SDL_KEYUP:
-            case SDL_KEYDOWN:
-                switch (event.key.keysym.sym) {
-                    case SDLK_ESCAPE:   return true;
-                    case SDLK_KP_PLUS:  speed[0] = key_down; break;
-                    case SDLK_KP_MINUS: speed[1] = key_down; break;
-                    case SDLK_UP:       arrows[0] = key_down; break;
-                    case SDLK_w:        arrows[0] = key_down; break;
-                    case SDLK_DOWN:     arrows[1] = key_down; break;
-                    case SDLK_s:        arrows[1] = key_down; break;
-                    case SDLK_LEFT:     arrows[2] = key_down; break;
-                    case SDLK_a:        arrows[2] = key_down; break;
-                    case SDLK_RIGHT:    arrows[3] = key_down; break;
-                    case SDLK_d:        arrows[3] = key_down; break;
-                    case SDLK_c:
-                        info("Camera Eye: ", cam.eye.x, " ", cam.eye.y, " ", cam.eye.z );
-                        info("Camera Dir: ", cam.dir.x, " ", cam.dir.y, " ", cam.dir.z);
-                        info("Camera Up:  ", cam.up.x, " ", cam.up.y, " ", cam.up.z);
-                        break;
-                }
-                break;
-            case SDL_MOUSEBUTTONDOWN:
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    camera_on = true;
-                }
-                break;
-            case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                    camera_on = false;
-                }
-                break;
-            case SDL_MOUSEMOTION:
-                if (camera_on) {
-                    cam.rotate(event.motion.xrel * rspeed, event.motion.yrel * rspeed);
-                    iter = 0;
-                }
-                break;
-            case SDL_QUIT:
-                return true;
-            default:
-                break;
-        }
-    }
-
-    if (arrows[0]) cam.move(0, 0,  tspeed);
-    if (arrows[1]) cam.move(0, 0, -tspeed);
-    if (arrows[2]) cam.move(-tspeed, 0, 0);
-    if (arrows[3]) cam.move( tspeed, 0, 0);
-    if (arrows[0] | arrows[1] | arrows[2] | arrows[3]) iter = 0;
-    if (speed[0]) tspeed *= 1.1f;
-    if (speed[1]) tspeed *= 0.9f;
-    return false;
-}
-
-#define RGB_C(r,g,b) (((r) << 16) | ((g) << 8) | (b))
-
-static inline rgb xyz_to_srgb(const rgb& c) {
-    return rgb(  3.2404542f*c.x - 1.5371385f*c.y - 0.4985314f*c.z, 
-                -0.9692660f*c.x + 1.8760108f*c.y + 0.0415560f*c.z,
-                 0.0556434f*c.x - 0.2040259f*c.y + 1.0572252f*c.z);
-}
-
-static inline rgb srgb_to_xyz(const rgb& c) {
-    return rgb( 0.4124564f*c.x + 0.3575761f*c.y + 0.1804375f*c.z,
-                0.2126729f*c.x + 0.7151522f*c.y + 0.0721750f*c.z,
-                0.0193339f*c.x + 0.1191920f*c.y + 0.9503041f*c.z);
-}
-
-static inline rgb xyY_to_srgb(const rgb& c) {
-    return c.y == 0 ? rgb(0,0,0) : xyz_to_srgb(rgb(c.x*c.z/c.y, c.z, (1-c.x-c.y)*c.z/c.y));
-}
-
-static inline rgb srgb_to_xyY(const rgb& c) {
-    const auto s = srgb_to_xyz(c);
-    const auto n = s.x+s.y+s.z;
-    return (n == 0)?rgb(0,0,0):rgb(s.x/n, s.y/n, s.y);
-}
-
-static inline float reinhard_modified(float L) {
-    constexpr float WhitePoint = 4.0f;
-    return (L*(1.0f+L/(WhitePoint*WhitePoint)))/(1.0f+L);
-}
-
-
-static float estimateLuminance(size_t width, size_t height) {
-    auto film = get_pixels();
-    float max_luminance = 0.00001f;
-
-#ifdef USE_MEDIAN_FOR_LUMINANCE_ESTIMATION
-    constexpr size_t WINDOW_S = 3;
-    constexpr size_t EDGE_S = WINDOW_S/2;
-    std::array<float, WINDOW_S*WINDOW_S> window;
-
-    for (size_t y = EDGE_S; y < height-EDGE_S; ++y) {
-        for (size_t x = EDGE_S; x < width-EDGE_S; ++x) {
-
-            size_t i = 0;
-            for(size_t wy = 0; wy <WINDOW_S; ++wy) {
-                for(size_t wx = 0; wx <WINDOW_S; ++wx) {
-                    const auto ix = x + wx - EDGE_S;
-                    const auto iy = y + wy - EDGE_S;
-
-                    auto r = film[(iy * width + ix) * 3 + 0];
-                    auto g = film[(iy * width + ix) * 3 + 1];
-                    auto b = film[(iy * width + ix) * 3 + 2];
-
-                    window[i] = srgb_to_xyY(rgb(r,g,b)).z;
-                    ++i;
-                }
-            }
-
-            std::sort(window.begin(), window.end());
-            const auto L = window[window.size()/2];
-            max_luminance = std::max(max_luminance, L);
-        }
-    }
-#else
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t x = 0; x < width; ++x) {
-            auto r = film[(y * width + x) * 3 + 0];
-            auto g = film[(y * width + x) * 3 + 1];
-            auto b = film[(y * width + x) * 3 + 2];
-
-            const auto L = srgb_to_xyY(rgb(r,g,b)).z;
-            max_luminance = std::max(max_luminance, L);
-        }
-    }
-#endif
-
-    return max_luminance;
-}
-
-static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, size_t height, uint32_t iter) {
-    auto film = get_pixels();
-    auto inv_iter = 1.0f / iter;
-    auto inv_gamma = 1.0f / 2.2f;
-    
-    float max_luminance = estimateLuminance(width, height);
-
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t x = 0; x < width; ++x) {
-            auto r = film[(y * width + x) * 3 + 0];
-            auto g = film[(y * width + x) * 3 + 1];
-            auto b = film[(y * width + x) * 3 + 2];
-
-            const auto xyY = srgb_to_xyY(rgb(r,g,b));
-#ifdef CULL_BAD_COLOR
-            if(std::isinf(xyY.z)) {
-#ifdef CATCH_BAD_COLOR
-                buf[y * width + x] = RGB_C(255, 0, 150);//Pink
-#endif
-                continue;
-            } else if(std::isnan(xyY.z)) {
-#ifdef CATCH_BAD_COLOR
-                buf[y * width + x] = RGB_C(0, 255, 255);//Cyan
-#endif
-                continue;
-            } else if(xyY.x < 0.0f || xyY.y < 0.0f || xyY.z < 0.0f) {
-#ifdef CATCH_BAD_COLOR
-                buf[y * width + x] = RGB_C(255, 255, 0);//Orange
-#endif
-                continue;
-            }
-#endif
-
-            //const float L = xyY.z / (9.6f * avg_luminance);
-            const float L = xyY.z / max_luminance;
-            const auto c = xyY_to_srgb(rgb(xyY.x, xyY.y, reinhard_modified(L)));
-
-            buf[y * width + x] =
-                (uint32_t(clamp(std::pow(c.x, inv_gamma), 0.0f, 1.0f) * 255.0f) << 16) |
-                (uint32_t(clamp(std::pow(c.y, inv_gamma), 0.0f, 1.0f) * 255.0f) << 8)  |
-                 uint32_t(clamp(std::pow(c.z, inv_gamma), 0.0f, 1.0f) * 255.0f);
-        }
-    }
-    SDL_UpdateTexture(texture, nullptr, buf, width * sizeof(uint32_t));
-}
-#endif
 
 static void save_image(const std::string& out_file, size_t width, size_t height, uint32_t iter) {
     ImageRgba32 img;
@@ -376,28 +149,7 @@ int main(int argc, char** argv) {
         bench_iter = 1;
     }
 #else
-    if (SDL_Init(SDL_INIT_VIDEO) != 0)
-        error("Cannot initialize SDL.");
-
-    auto window = SDL_CreateWindow(
-        "Rodent",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
-        width,
-        height,
-        0);
-    if (!window)
-        error("Cannot create window.");
-
-    auto renderer = SDL_CreateRenderer(window, -1, 0);
-    if (!renderer)
-        error("Cannot create renderer.");
-
-    auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, width, height);
-    if (!texture)
-        error("Cannot create texture");
-
-    std::unique_ptr<uint32_t> buf(new uint32_t[width * height]);
+    rodent_ui_init(width, height);
 #endif
 
     setup_interface(width, height);
@@ -420,7 +172,7 @@ int main(int argc, char** argv) {
     std::vector<double> samples_sec;
     while (!done) {
 #ifndef DISABLE_GUI
-        done = handle_events(iter, cam);
+        done = rodent_ui_handleinput(iter, cam);
 #endif
         if (iter == 0)
             clear_pixels();
@@ -463,25 +215,19 @@ int main(int argc, char** argv) {
             std::ostringstream os;
             os << "Rodent [" << frames_sec << " FPS, "
                << iter * spp << " " << "sample" << (iter * spp > 1 ? "s" : "") << "]";
-            SDL_SetWindowTitle(window, os.str().c_str());
+            rodent_ui_settitle(os.str().c_str());
 #endif
             frames = 0;
             timing = 0;
         }
 
 #ifndef DISABLE_GUI
-        update_texture(buf.get(), texture, width, height, iter);
-        SDL_RenderClear(renderer);
-        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-        SDL_RenderPresent(renderer);
+        rodent_ui_update(iter);
 #endif
     }
 
 #ifndef DISABLE_GUI
-    SDL_DestroyTexture(texture);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    rodent_ui_close();
 #endif
 
     if (out_file != "") {
