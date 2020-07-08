@@ -3,6 +3,7 @@ struct PathTracer {
     on_hit:    fn (Ray, Hit, &mut RayState, SurfaceElement, Material, fn (SpectralWeight) -> !) -> (),
     on_shadow: fn (Ray, Hit, &mut RayState, SurfaceElement, Material, fn (Ray, SpectralWeight) -> !) -> (),
     on_bounce: fn (Ray, Hit, &mut RayState, SurfaceElement, Material, fn (Ray, RayState) -> !) -> (),
+    on_nonhit: fn (Ray, &mut RayState, fn (SpectralWeight) -> !) -> (),// TODO
 }
 
 struct RayState {
@@ -49,12 +50,14 @@ fn @make_debug_renderer() -> Renderer {
         let on_hit = @ |ray, hit, state, surf, mat, accumulate| {
             accumulate(spectral_weight_mulf(make_spectral_weight_one(), -vec3_dot(ray.dir, surf.local.col(2))))
         };
+        let on_nonhit = @ |_, _, _| ();
 
         let path_tracer = PathTracer {
             on_emit:   on_emit,
             on_hit:    on_hit,
             on_shadow: on_shadow,
-            on_bounce: on_bounce
+            on_bounce: on_bounce,
+            on_nonhit: on_nonhit
         };
 
         let mapper = make_tonemapper_srgb();
@@ -74,12 +77,14 @@ fn @make_emission_renderer() -> Renderer {
                 accumulate(spectrum_eval(emit.intensity, ray.wvl))
             }
         };
+        let on_nonhit = @ |_, _, _| ();
 
         let path_tracer = PathTracer {
             on_emit:   on_emit,
             on_hit:    on_hit,
             on_shadow: on_shadow,
-            on_bounce: on_bounce
+            on_bounce: on_bounce,
+            on_nonhit: on_nonhit
         };
 
         let mapper = make_tonemapper_srgb();
@@ -108,12 +113,14 @@ fn @make_whitefurnance_renderer() -> Renderer {
             let contrib = spectral_weight_mul(spectrum_eval(env, ray.wvl), bsdf);
             accumulate(spectral_weight_mulf(contrib, vec3_dot(out_dir, N)))
         };
+        let on_nonhit = @ |_, _, _| ();
 
         let path_tracer = PathTracer {
             on_emit:   on_emit,
             on_hit:    on_hit,
             on_shadow: on_shadow,
-            on_bounce: on_bounce
+            on_bounce: on_bounce,
+            on_nonhit: on_nonhit
         };
 
         let mapper = make_tonemapper_srgb();
@@ -216,12 +223,15 @@ fn @make_path_tracing_renderer(max_path_len: i32, spp: i32)-> Renderer {
                 make_ray_state(state.rnd, spectral_weight_mulf(contrib, mat_sample.cos / factor), mis, state.depth + 1)
             )
         }
+        
+        let on_nonhit = @ |_, _, _| ();
 
         let path_tracer = PathTracer {
             on_emit:   on_emit,
             on_hit:    on_hit,
             on_shadow: on_shadow,
-            on_bounce: on_bounce
+            on_bounce: on_bounce,
+            on_nonhit: on_nonhit
         };
 
         let mapper = make_tonemapper_srgb();

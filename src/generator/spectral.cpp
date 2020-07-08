@@ -89,11 +89,11 @@ void SpectralUpsampler::prepare(const float* r, size_t r_slice, const float* g, 
     constexpr float EPS = 0.0001f;
     constexpr float ZERO_A = 0;
     constexpr float ZERO_B = 0;
-    constexpr float ZERO_C = -std::numeric_limits<float>::infinity(); // -500 is also possible and is closer to zero, but -50 is sufficient for floats
+    constexpr float ZERO_C = -50.0f/*std::numeric_limits<float>::infinity()*/; // -500 is also possible and is closer to zero, but -50 is sufficient for floats
 
     constexpr float ONE_A = 0;
     constexpr float ONE_B = 0;
-    constexpr float ONE_C = std::numeric_limits<float>::infinity();
+    constexpr float ONE_C = 50000.0f/*std::numeric_limits<float>::infinity()*/;
 
     const auto res = mInternal->Resolution;
     const auto dx = COEFFS_N;

@@ -52,11 +52,24 @@ fn @spherical_from_dir(math: Intrinsics, dir: Vec3) -> (f32, f32) {
 }
 
 // Samples a point uniformly on a triangle
+// Based on "A Low-Distortion Map Between Triangle and Square" by Eric Heitz
+// and https://pharr.org/matt/blog/2019/03/13/triangle-sampling-1.5.html
 fn @sample_triangle(mut u: f32, mut v: f32, v0: Vec3, v1: Vec3, v2: Vec3) -> Vec3 {
     if (u + v > 1.0f) {
         u = 1.0f - u;
         v = 1.0f - v;
     }
+
+    if (u > v) {
+        let x = u / 2.0f;
+        u = x;
+        v = v - x;
+    } else {
+        let y = v / 2.0f;
+        u = u - y;
+        v = y;
+    }
+
     vec3_add(
         vec3_add(vec3_mulf(v0, 1.0f - v - u),
                  vec3_mulf(v1, u)),

@@ -77,19 +77,20 @@ inline bool is_simple_brdf(const std::string &brdf)
 inline void setup_integrator(const Object &obj, const LoadInfo& info, std::ostream &os)
 {
     // TODO: Use the sensor sample count as ssp
+    size_t lastMPL = info.MaxPathLen;
     for (const auto &child : obj.anonymousChildren()) {
         if (child->type() != OT_INTEGRATOR)
             continue;
 
+        lastMPL = child->property("max_depth").getInteger(info.MaxPathLen);
         if (child->pluginType() == "path") {
-            size_t mpl = child->property("max_depth").getInteger(info.MaxPathLen);
-            os << "    let renderer = make_path_tracing_renderer(" << mpl << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
+            os << "    let renderer = make_path_tracing_renderer(" << lastMPL << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
             return;
         }
     }
 
     warn("No known integrator specified, therefore using path tracer");
-    os << "    let renderer = make_path_tracing_renderer(" << info.MaxPathLen << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
+    os << "    let renderer = make_path_tracing_renderer(" << lastMPL << " /*max_path_len*/, " << info.SPP << " /*spp*/);\n";
     //os << "     let renderer = make_debug_renderer();\n";
 }
 
@@ -348,6 +349,8 @@ static void setup_textures(const Object& elem, const LoadInfo& info, const GenCo
     if(ctx.Textures.empty())
         return;
 
+    std::unordered_set<std::string> mapped;
+
     ::info("Generating images for '", info.Filename, "'");
     os << "\n    // Images\n";    
     for(const auto& tex: ctx.Textures) {
@@ -359,6 +362,12 @@ static void setup_textures(const Object& elem, const LoadInfo& info, const GenCo
             warn("Invalid texture found");
             continue;
         }
+
+        if(mapped.count(filename))// FIXME: Different properties?
+            continue;
+        
+        mapped.insert(filename);
+    
         auto name = fix_file(filename);
         auto c_name = export_image(info.Upsampler, info.Dir + "/" + name);
         os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
@@ -546,7 +555,8 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
             mat.BSDF->pluginType() == "roughdiffuse"/*TODO*/) {
             os << "        let bsdf = make_diffuse_bsdf(math, surf, " << extractMaterialPropertySpectral(mat.BSDF, "reflectance", info, ctx) << ");\n";
         } else if(mat.BSDF->pluginType() == "dielectric" ||
-            mat.BSDF->pluginType() == "roughdielectric"/*TODO*/) {
+            mat.BSDF->pluginType() == "roughdielectric"/*TODO*/ ||
+            mat.BSDF->pluginType() == "thindielectric"/*TODO*/) {
             os << "        let bsdf = make_glass_bsdf(math, surf, " 
             << extractMaterialPropertyIOR(mat.BSDF, "ext_ior", info, ctx, 1.5046f) << ", " 
             << extractMaterialPropertyIOR(mat.BSDF, "int_ior", info, ctx, 1.000277f) << ", " 
@@ -558,7 +568,13 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
             << extractMaterialPropertySpectral(mat.BSDF, "eta", info, ctx, 0.63660f) << ", " 
             << extractMaterialPropertySpectral(mat.BSDF, "k", info, ctx, 2.7834f) << ", " // TODO: Better defaults?
             << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ");\n";
-        }else {
+        } else if(mat.BSDF->pluginType() == "phong" ||
+            mat.BSDF->pluginType() == "plastic"/*TODO*/ ||
+            mat.BSDF->pluginType() == "roughplastic"/*TODO*/) {
+            os << "        let bsdf = make_phong_bsdf(math, surf, "
+            << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ", "
+            << escape_f32(mat.BSDF->property("exponent").getNumber(30)) << ");\n";
+        } else {
             warn("Unknown bsdf '", mat.BSDF->pluginType(), "'");
             os << "        let bsdf = make_black_bsdf();\n";
         }
@@ -609,6 +625,10 @@ static size_t setup_lights(const Object& elem, const LoadInfo& info, const GenCo
                     << escape_f32(dir.x) << ", " << escape_f32(dir.y) << ", " << escape_f32(dir.z) << "), "  
                     << escape_f32(ctx.SceneDiameter) << ", "
                     << "make_d65_illum(" << escape_f32(power) << "));\n";
+        } else if(child->pluginType() == "constant") {
+            os << "    let light_" << light_count << " = make_environment_light(math, "
+                    << escape_f32(ctx.SceneDiameter) << ", "
+                    << extractMaterialPropertyIllum(child, "radiance", info, ctx, 1.0f) << ");\n";
         } else {
             warn("Unknown emitter type '", child->pluginType(), "'");
             continue;

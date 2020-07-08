@@ -2,6 +2,9 @@
 
 #include <fstream>
 #include <sstream>
+#include <chrono>
+#include <ctime>
+#include <iomanip>
 
 #include <SDL.h>
 #include "imgui.h"
@@ -37,6 +40,7 @@ struct CameraPose {
     {}
 };
 static int sPoseRequest = -1;
+static bool sScreenshotRequest = false;
 static bool sShowUI = true;
 
 // Stats
@@ -182,6 +186,7 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                             case SDLK_0:        handle_pose_input(9, capture, cam); break;
                             case SDLK_t:        sToneMapping_Automatic = !sToneMapping_Automatic; break;
                             case SDLK_F2:       sShowUI = !sShowUI; break;
+                            case SDLK_F11:      sScreenshotRequest = true; break;
                         }
                     }
                 }
@@ -259,6 +264,7 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
     return false;
 }
 
+// ToneMapping
 #define RGB_C(r,g,b) (((r) << 16) | ((g) << 8) | (b))
 
 static inline rgb xyz_to_srgb(const rgb& c) {
@@ -401,6 +407,38 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
     SDL_UpdateTexture(texture, nullptr, buf, width * sizeof(uint32_t));
 }
 
+static void make_screenshot(size_t width, size_t height, uint32_t iter) {
+    std::stringstream out_file;
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    out_file << "screenshot_" << std::put_time(std::localtime(&in_time_t), "%Y_%m_%d_%H_%M_%S") << ".exr";
+
+    ImageRgba32 img;
+    img.width = width;
+    img.height = height;
+    img.pixels.reset(new float[width * height * 4]);
+
+    auto film = get_pixels();
+    auto inv_iter = 1.0f / iter;
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            auto r = film[(y * width + x) * 3 + 0];
+            auto g = film[(y * width + x) * 3 + 1];
+            auto b = film[(y * width + x) * 3 + 2];
+
+            img.pixels[4 * (y * width + x) + 0] = r * inv_iter;
+            img.pixels[4 * (y * width + x) + 1] = g * inv_iter;
+            img.pixels[4 * (y * width + x) + 2] = b * inv_iter;
+            img.pixels[4 * (y * width + x) + 3] = 1.0f;
+        }
+    }
+
+    if (!save_exr(out_file.str(), img))
+        error("Failed to save EXR file '", out_file.str(), "'");
+    else
+        info("Screenshot saved to '", out_file.str(), "'");
+}
+
 void rodent_ui_init(int width, int height) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0)
         error("Cannot initialize SDL.");
@@ -501,6 +539,10 @@ static void handle_imgui(uint32_t iter) {
 
 void rodent_ui_update(uint32_t iter) {
     update_texture(sBuffer.data(), sTexture, sWidth, sHeight, iter);
+    if(sScreenshotRequest) {
+        make_screenshot(sWidth, sHeight, iter);
+        sScreenshotRequest = false;   
+    }
     SDL_RenderClear(sRenderer);
     SDL_RenderCopy(sRenderer, sTexture, nullptr, nullptr);
 
