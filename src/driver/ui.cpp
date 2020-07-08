@@ -39,14 +39,23 @@ struct CameraPose {
         , Up(cam.up)
     {}
 };
+
+struct LuminanceInfo {
+    float Min = std::numeric_limits<float>::infinity();
+    float Max = 0.0f;
+    float Avg = 0.0f;
+    float Est = 0.000001f;
+};
+
 static int sPoseRequest = -1;
 static bool sScreenshotRequest = false;
 static bool sShowUI = true;
 
 // Stats
-static float sStats_MaxLum = 0.0f;
-static float sStats_MinLum = std::numeric_limits<float>::infinity();
-static float sStats_AvgLum = 0.0f;
+static LuminanceInfo sLastLum;
+constexpr size_t HISTOGRAM_SIZE = 100;
+static std::array<float, HISTOGRAM_SIZE> sHistogram;
+
 static CameraPose sLastCameraPose;
 
 static bool sToneMapping_Automatic = true;
@@ -294,12 +303,48 @@ static inline float reinhard_modified(float L) {
     return (L*(1.0f+L/(WhitePoint*WhitePoint)))/(1.0f+L);
 }
 
+static void analzeLuminance(size_t width, size_t height, uint32_t iter) {
+    const auto film = get_pixels();
+    auto inv_iter = 1.0f / iter;
+    const float avgFactor = 1.0f/(width*height);
+    sLastLum = LuminanceInfo();
 
-static float estimateLuminance(size_t width, size_t height) {
-    auto film = get_pixels();
-    float max_luminance = 0.00001f;
+    // Extract basic information
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            auto r = film[(y * width + x) * 3 + 0];
+            auto g = film[(y * width + x) * 3 + 1];
+            auto b = film[(y * width + x) * 3 + 2];
 
+            const auto L = srgb_to_xyY(rgb(r,g,b)).z * inv_iter;
+
+            sLastLum.Max = std::max(sLastLum.Max, L);
+            sLastLum.Min = std::min(sLastLum.Min, L);
+            sLastLum.Avg += L * avgFactor;
+        }
+    }
+
+    // Setup histogram
+    sHistogram.fill(0.0f);
+    const float histogram_factor = HISTOGRAM_SIZE/std::max(sLastLum.Max, 1.0f);
+    for (size_t y = 0; y < height; ++y) {
+        for (size_t x = 0; x < width; ++x) {
+            auto r = film[(y * width + x) * 3 + 0];
+            auto g = film[(y * width + x) * 3 + 1];
+            auto b = film[(y * width + x) * 3 + 2];
+
+            const auto L  = srgb_to_xyY(rgb(r,g,b)).z * inv_iter;
+            const int idx = std::max(0, std::min<int>(L * histogram_factor, HISTOGRAM_SIZE-1));
+            sHistogram[idx] += avgFactor;
+        }
+    }
+
+    // Estimate for reinhard
 #ifdef USE_MEDIAN_FOR_LUMINANCE_ESTIMATION
+    if(!sToneMapping_Automatic) {
+        sLastLum.Est = sLastLum.Max;
+        return;
+    }
     constexpr size_t WINDOW_S = 3;
     constexpr size_t EDGE_S = WINDOW_S/2;
     std::array<float, WINDOW_S*WINDOW_S> window;
@@ -324,23 +369,12 @@ static float estimateLuminance(size_t width, size_t height) {
 
             std::sort(window.begin(), window.end());
             const auto L = window[window.size()/2];
-            max_luminance = std::max(max_luminance, L);
+            sLastLum.Est = std::max(sLastLum.Est, L * inv_iter);
         }
     }
 #else
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t x = 0; x < width; ++x) {
-            auto r = film[(y * width + x) * 3 + 0];
-            auto g = film[(y * width + x) * 3 + 1];
-            auto b = film[(y * width + x) * 3 + 2];
-
-            const auto L = srgb_to_xyY(rgb(r,g,b)).z;
-            max_luminance = std::max(max_luminance, L);
-        }
-    }
+    sLastLum.Est = sLastLum.Max;
 #endif
-
-    return max_luminance;
 }
 
 static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, size_t height, uint32_t iter) {
@@ -348,15 +382,10 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
     auto inv_iter = 1.0f / iter;
     auto inv_gamma = 1.0f / 2.2f;
     
-    sStats_MaxLum = 0.0f;
-    sStats_MinLum = std::numeric_limits<float>::infinity();
-    sStats_AvgLum = 0.0f;
     const float avgFactor = 1.0f/(width*height);
     
     const float exposure_factor = std::pow(2.0, sToneMapping_Exposure);
-    float max_luminance = 0.0f;
-    if(sToneMapping_Automatic)
-        max_luminance = estimateLuminance(width, height) * inv_iter;
+    analzeLuminance(width, height, iter);
 
     for (size_t y = 0; y < height; ++y) {
         for (size_t x = 0; x < width; ++x) {
@@ -384,13 +413,9 @@ static void update_texture(uint32_t* buf, SDL_Texture* texture, size_t width, si
             }
 #endif
 
-            sStats_MaxLum = std::max(sStats_MaxLum, xyY.z);
-            sStats_MinLum = std::min(sStats_MinLum, xyY.z);
-            sStats_AvgLum += xyY.z * avgFactor;
-
             rgb color;
             if(sToneMapping_Automatic) {
-                const float L = xyY.z / max_luminance;
+                const float L = xyY.z / sLastLum.Est;
                 color = xyY_to_srgb(rgb(xyY.x, xyY.y, reinhard_modified(L)));
             } else {
                 color = rgb(exposure_factor * r + sToneMapping_Offset,
@@ -495,7 +520,7 @@ bool rodent_ui_handleinput(uint32_t& iter, Camera& cam) {
 }
 
 constexpr size_t UI_W = 300;
-constexpr size_t UI_H = 300;
+constexpr size_t UI_H = 400;
 static void handle_imgui(uint32_t iter) {
     ImGui::SetNextWindowPos(ImVec2(5,5), ImGuiCond_Once);
     ImGui::SetNextWindowSize(ImVec2(UI_W,UI_H), ImGuiCond_Once);
@@ -503,12 +528,16 @@ static void handle_imgui(uint32_t iter) {
     if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Text("Iter %i", iter);
         ImGui::Text("SPP %i", iter*get_spp());
-        ImGui::Text("Max Lum %f", sStats_MaxLum);
-        ImGui::Text("Min Lum %f", sStats_MinLum);
-        ImGui::Text("Avg Lum %f", sStats_AvgLum);
+        ImGui::Text("Max Lum %f", sLastLum.Max);
+        ImGui::Text("Min Lum %f", sLastLum.Min);
+        ImGui::Text("Avg Lum %f", sLastLum.Avg);
         ImGui::Text("Cam Eye (%f, %f, %f)", sLastCameraPose.Eye.x, sLastCameraPose.Eye.y, sLastCameraPose.Eye.z);
         ImGui::Text("Cam Dir (%f, %f, %f)", sLastCameraPose.Dir.x, sLastCameraPose.Dir.y, sLastCameraPose.Dir.z);
         ImGui::Text("Cam Up  (%f, %f, %f)", sLastCameraPose.Up.x, sLastCameraPose.Up.y, sLastCameraPose.Up.z);
+
+        ImGui::PushItemWidth(-1);
+        ImGui::PlotHistogram("", sHistogram.data(), HISTOGRAM_SIZE, 0, nullptr, 0.0f, 1.0f, ImVec2(0,60));
+        ImGui::PopItemWidth();
     }
     
     if(ImGui::CollapsingHeader("ToneMapping", ImGuiTreeNodeFlags_DefaultOpen)) {
