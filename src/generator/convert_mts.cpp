@@ -498,9 +498,17 @@ static std::string extractTexture(const std::shared_ptr<Object>& tex, const Load
             sstream << "tex_" << make_id(fix_file(filename)) << "(vec4_to_2(surf.attr(0)))";
         }
     } else if (tex->pluginType() == "checkerboard") {
+        auto uscale = tex->property("uscale").getNumber(1);
+        auto vscale = tex->property("vscale").getNumber(1);
         sstream << "eval_checkerboard_texture(math, make_repeat_border(), " 
             << extractMaterialPropertySpectral(tex, "color0", info, ctx, 0.4f) << ", " 
-            << extractMaterialPropertySpectral(tex, "color1", info, ctx, 0.2f) << ", vec4_to_2(surf.attr(0)))";
+            << extractMaterialPropertySpectral(tex, "color1", info, ctx, 0.2f) << ", ";
+        if(uscale != 1 || vscale != 1)
+            sstream << "vec2_mul(vec4_to_2(surf.attr(0)), make_vec2(" << escape_f32(uscale) << ", " << escape_f32(vscale) << "))";
+        else
+            sstream << "vec4_to_2(surf.attr(0))";
+
+        sstream << ")";
     } else {
         warn("Invalid texture type '", tex->pluginType(), "'");
     }
