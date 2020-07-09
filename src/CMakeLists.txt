@@ -75,6 +75,10 @@ set(GENERATOR_SRCS
 set(RUNTIME_SRCS
     runtime/obj.cpp
     runtime/obj.h
+    runtime/mesh.cpp
+    runtime/mesh.h
+    runtime/ply.cpp
+    runtime/ply.h
     runtime/file_path.h
     runtime/image_exr.cpp
     runtime/image_jpg.cpp

@@ -173,7 +173,7 @@ int load_texture(optix::Context& context, std::unordered_map<std::string, int>& 
     return tex_map[name] = sampler->getId();
 }
 
-optix::Context load_scene(const FilePath& path, obj::TriMesh& tri_mesh, obj::File& obj_file, obj::MaterialLib& mtl_lib) {
+optix::Context load_scene(const FilePath& path, mesh::TriMesh& tri_mesh, obj::File& obj_file, obj::MaterialLib& mtl_lib) {
     auto context = optix::Context::create();
     std::ifstream ptx_stream(GENERATED_PTX_FILE);
     if (!ptx_stream) {

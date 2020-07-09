@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "bvh.h"
+#include "runtime/ply.h"
 #include "impala.h"
 #include "export_image.h"
 #include "spectral.h"
@@ -64,7 +65,7 @@ struct GenContext {
     std::vector<Shape> Shapes;
     std::vector<Material> Materials;
     std::unordered_set<std::shared_ptr<Object>> Textures;
-    obj::TriMesh Mesh;
+    mesh::TriMesh Mesh;
     BBox SceneBBox;
     float SceneDiameter = 0.0f;
 };
@@ -134,7 +135,7 @@ inline std::shared_ptr<Object> add_bsdf(const std::shared_ptr<Object>& elem, Gen
     if(elem->pluginType() == "twosided") {
         if(elem->anonymousChildren().size() != 1)
             error("Invalid twosided bsdf");
-        //warn("Ignoring twosided bsdf");
+        // warn("Ignoring twosided bsdf");
         return add_bsdf(elem->anonymousChildren().front(), ctx);
     } else {
         for(const auto& child: elem->namedChildren()) {
@@ -161,11 +162,11 @@ inline constexpr std::array<uint32_t, 8> map_rectangle_index(const std::array<ui
 }
 
 template<size_t N>
-inline void insert_index(obj::TriMesh& mesh, const std::array<uint32_t,N>& arr) {
+inline void insert_index(mesh::TriMesh& mesh, const std::array<uint32_t,N>& arr) {
     mesh.indices.insert(mesh.indices.end(), arr.begin(), arr.end());
 }
 
-inline void add_rectangle(obj::TriMesh& mesh, const std::array<float3, 4>& points, const float3& N) {
+inline void add_rectangle(mesh::TriMesh& mesh, const std::array<float3, 4>& points, const float3& N) {
     uint32_t off = mesh.vertices.size();
     mesh.vertices.insert(mesh.vertices.end(), points.begin(), points.end());
     mesh.normals.insert(mesh.normals.end(), {N,N,N,N});
@@ -174,20 +175,20 @@ inline void add_rectangle(obj::TriMesh& mesh, const std::array<float3, 4>& point
     insert_index(mesh, map_rectangle_index({0+off,1+off,2+off,3+off}));
 }
 
-inline obj::TriMesh setup_mesh_rectangle(const Object& elem, const LoadInfo& info) {
+inline mesh::TriMesh setup_mesh_rectangle(const Object& elem, const LoadInfo& info) {
     const float3 N = float3(0,0,1);
-    obj::TriMesh mesh;
+    mesh::TriMesh mesh;
     add_rectangle(mesh, {float3(-1,-1,0),float3(1,-1,0),float3(1,1,0),float3(-1,1,0)}, N);
     return mesh;
 }
 
-inline obj::TriMesh setup_mesh_cube(const Object& elem, const LoadInfo& info) {
+inline mesh::TriMesh setup_mesh_cube(const Object& elem, const LoadInfo& info) {
     const float3 NZ = float3(0,0,1);
     const float3 NY = float3(0,1,0);
     const float3 NX = float3(1,0,0);
 
     // TODO: Fix order (is it?)
-    obj::TriMesh mesh;
+    mesh::TriMesh mesh;
     add_rectangle(mesh, {float3(-1,-1,-1),float3(1,-1,-1),float3(1,1,-1),float3(-1,1,-1)}, -NZ);
     add_rectangle(mesh, {float3(-1,-1,1),float3(-1,1,1),float3(1,1,1),float3(1,-1,1)}, NZ);
 
@@ -199,15 +200,25 @@ inline obj::TriMesh setup_mesh_cube(const Object& elem, const LoadInfo& info) {
     return mesh;
 }
 
-inline obj::TriMesh setup_mesh_obj(const Object& elem, const LoadInfo& info) {
+inline mesh::TriMesh setup_mesh_obj(const Object& elem, const LoadInfo& info) {
     obj::File file;
     std::string filename = info.Dir + "/" + elem.property("filename").getString();
     if(!obj::load_obj(FilePath(filename), file)) {
         warn("Can not load shape given by file '", filename, "'");
-        return obj::TriMesh();
+        return mesh::TriMesh();
     }
 
     return obj::compute_tri_mesh(file, 0);           
+}
+
+inline mesh::TriMesh setup_mesh_ply(const Object& elem, const LoadInfo& info) {
+    std::string filename = info.Dir + "/" + elem.property("filename").getString();
+    auto trimesh = ply::load_mesh(filename);           
+    if(trimesh.vertices.empty()){
+        warn("Can not load shape given by file '", filename, "'");
+        return mesh::TriMesh();
+    }
+    return trimesh;
 }
 
 static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& ctx, std::ostream &os) {
@@ -217,13 +228,15 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
         if(child->type() != OT_SHAPE)
             continue;
 
-        obj::TriMesh child_mesh;
+        mesh::TriMesh child_mesh;
         if (child->pluginType() == "rectangle") {
             child_mesh = setup_mesh_rectangle(*child, info);
         } else if (child->pluginType() == "cube") {
             child_mesh = setup_mesh_cube(*child, info);
         } else if(child->pluginType() == "obj") {
             child_mesh = setup_mesh_obj(*child, info);
+        } else if(child->pluginType() == "ply") {
+            child_mesh = setup_mesh_ply(*child, info);
         } else {
             warn("Can not load shape type '", child->pluginType(), "'");
             continue;
@@ -231,6 +244,10 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
 
         if(child_mesh.vertices.empty())
             continue;
+
+        auto flip = child->property("flip_normals").getBool();
+        if(flip)
+            mesh::flip_normals(child_mesh);
         
         auto transform = child->property("to_world").getTransform();
         for(size_t i = 0; i < child_mesh.vertices.size(); ++i)
@@ -256,13 +273,22 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
             }
         }
 
+        for(const auto& inner_child : child->namedChildren()) {
+            if(inner_child.second->type() == OT_BSDF)
+                shape.Material.BSDF = add_bsdf(inner_child.second, ctx);
+            else if(inner_child.second->type() == OT_EMITTER) {
+                shape.Material.Light = add_light(inner_child.second, ctx);
+                shape.Material.MeshId = ctx.Shapes.size();
+            }
+        }
+
         if(!unique_mats.count(shape.Material)) {
             unique_mats.emplace(shape.Material, ctx.Materials.size());
             ctx.Materials.emplace_back(shape.Material);
         }
 
-        obj::replace_material_tri_mesh(child_mesh, unique_mats.at(shape.Material));
-        obj::combine_into_tri_mesh(ctx.Mesh, child_mesh); 
+        mesh::replace_material(child_mesh, unique_mats.at(shape.Material));
+        mesh::merge(ctx.Mesh, child_mesh); 
         ctx.Shapes.emplace_back(std::move(shape));
     }
 
@@ -422,7 +448,7 @@ static std::string extractMaterialPropertySpectral(const std::shared_ptr<Object>
             sstream << "spectrum_mulf(make_blackbody_spectrum(math, " << escape_f32(blk.temperature)<< "), " << escape_f32(blk.scale)  << ")";
         } break;
         default:
-            warn("Unknown property type");
+            warn("Unknown property type for '", name, "'");
             sstream << "make_spectrum_none()";
             break;
         }
@@ -457,6 +483,21 @@ static std::string extractMaterialPropertyIOR(const std::shared_ptr<Object>& obj
         case PT_NONE:// TODO: What about textures?
             sstream << "make_const_refractive_index(" << escape_f32(def) << ")";
             break;
+        case PT_STRING: {
+            auto ior = prop.getString();
+            if(ior == "air") {
+                sstream << "make_const_refractive_index(1.000277f)";
+            } else if (ior == "bk7") {
+                sstream << "make_bk7_refractive_index(math)";
+            } else if (ior == "diamond") {
+                sstream << "make_diamond_refractive_index(math)";
+            } else if (ior == "water") {
+                sstream << "make_water_refractive_index(math)";
+            } else {
+                warn("Unknown ior '", ior, "'");
+                sstream << "make_const_refractive_index(" << escape_f32(def) << ")";
+            }
+        } break;
         default:
             sstream << "make_spectral_refractive_index(" << extractMaterialPropertySpectral(obj, name, info, ctx, def) << ")";
             break;
@@ -558,8 +599,8 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
             mat.BSDF->pluginType() == "roughdielectric"/*TODO*/ ||
             mat.BSDF->pluginType() == "thindielectric"/*TODO*/) {
             os << "        let bsdf = make_glass_bsdf(math, surf, " 
-            << extractMaterialPropertyIOR(mat.BSDF, "ext_ior", info, ctx, 1.5046f) << ", " 
-            << extractMaterialPropertyIOR(mat.BSDF, "int_ior", info, ctx, 1.000277f) << ", " 
+            << extractMaterialPropertyIOR(mat.BSDF, "ext_ior", info, ctx, 1.000277f) << ", " 
+            << extractMaterialPropertyIOR(mat.BSDF, "int_ior", info, ctx, 1.5046f) << ", " 
             << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ", " 
             << extractMaterialPropertySpectral(mat.BSDF, "specular_transmittance", info, ctx, 1.0f) << ");\n";
         } else if(mat.BSDF->pluginType() == "conductor" ||
@@ -574,6 +615,8 @@ static void setup_materials(const Object& elem, const LoadInfo& info, const GenC
             os << "        let bsdf = make_phong_bsdf(math, surf, "
             << extractMaterialPropertySpectral(mat.BSDF, "specular_reflectance", info, ctx, 1.0f) << ", "
             << escape_f32(mat.BSDF->property("exponent").getNumber(30)) << ");\n";
+        } else if(mat.BSDF->pluginType() == "null") {
+            os << "        let bsdf = make_black_bsdf();/* Null */\n";
         } else {
             warn("Unknown bsdf '", mat.BSDF->pluginType(), "'");
             os << "        let bsdf = make_black_bsdf();\n";

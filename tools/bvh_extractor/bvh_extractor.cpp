@@ -8,10 +8,10 @@
 #include "runtime/bvh.h"
 
 #ifdef ENABLE_EMBREE_BVH
-size_t build_bvh8(std::ofstream&, const obj::TriMesh&);
-size_t build_bvh4(std::ofstream&, const obj::TriMesh&);
+size_t build_bvh8(std::ofstream&, const mesh::TriMesh&);
+size_t build_bvh4(std::ofstream&, const mesh::TriMesh&);
 #endif
-size_t build_bvh2(std::ofstream&, const obj::TriMesh&);
+size_t build_bvh2(std::ofstream&, const mesh::TriMesh&);
 
 inline void check_argument(int i, int argc, char** argv) {
     if (i + 1 >= argc) {
@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
         std::cerr << "Cannot load OBJ file" << std::endl;
         return 1;
     }
-    obj::TriMesh tri_mesh = compute_tri_mesh(obj, 0);
+    mesh::TriMesh tri_mesh = compute_tri_mesh(obj, 0);
 
     std::cout << "Loaded OBJ file with " << tri_mesh.indices.size() / 4 << " triangle(s)" << std::endl;
 

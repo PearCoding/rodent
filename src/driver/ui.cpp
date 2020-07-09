@@ -50,6 +50,7 @@ struct LuminanceInfo {
 static int sPoseRequest = -1;
 static bool sScreenshotRequest = false;
 static bool sShowUI = true;
+static bool sLockInteraction = false;
 
 // Stats
 static LuminanceInfo sLastLum;
@@ -178,30 +179,36 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                     // Followings should only be handled once
                     if(event.type == SDL_KEYUP) {
                         const bool capture = io.KeyCtrl;
+                        if(!sLockInteraction) {
+                            switch (event.key.keysym.sym) {
+                                case SDLK_KP_1:     cam.update_dir(float3(0,0,1), float3(0,1,0)); iter = 0; break;
+                                case SDLK_KP_3:     cam.update_dir(float3(1,0,0), float3(0,1,0)); iter = 0; break;
+                                case SDLK_KP_7:     cam.update_dir(float3(0,1,0), float3(0,0,1)); iter = 0; break;
+                                case SDLK_KP_9:     cam.update_dir(-cam.dir, cam.up); iter = 0; break;
+                                case SDLK_1:        handle_pose_input(0, capture, cam); break;
+                                case SDLK_2:        handle_pose_input(1, capture, cam); break;
+                                case SDLK_3:        handle_pose_input(2, capture, cam); break;
+                                case SDLK_4:        handle_pose_input(3, capture, cam); break;
+                                case SDLK_5:        handle_pose_input(4, capture, cam); break;
+                                case SDLK_6:        handle_pose_input(5, capture, cam); break;
+                                case SDLK_7:        handle_pose_input(6, capture, cam); break;
+                                case SDLK_8:        handle_pose_input(7, capture, cam); break;
+                                case SDLK_9:        handle_pose_input(8, capture, cam); break;
+                                case SDLK_0:        handle_pose_input(9, capture, cam); break;
+                            }
+                        }
                         switch (event.key.keysym.sym) {
-                            case SDLK_KP_1:     cam.update_dir(float3(0,0,1), float3(0,1,0)); iter = 0; break;
-                            case SDLK_KP_3:     cam.update_dir(float3(1,0,0), float3(0,1,0)); iter = 0; break;
-                            case SDLK_KP_7:     cam.update_dir(float3(0,1,0), float3(0,0,1)); iter = 0; break;
-                            case SDLK_KP_9:     cam.update_dir(-cam.dir, cam.up); iter = 0; break;
-                            case SDLK_1:        handle_pose_input(0, capture, cam); break;
-                            case SDLK_2:        handle_pose_input(1, capture, cam); break;
-                            case SDLK_3:        handle_pose_input(2, capture, cam); break;
-                            case SDLK_4:        handle_pose_input(3, capture, cam); break;
-                            case SDLK_5:        handle_pose_input(4, capture, cam); break;
-                            case SDLK_6:        handle_pose_input(5, capture, cam); break;
-                            case SDLK_7:        handle_pose_input(6, capture, cam); break;
-                            case SDLK_8:        handle_pose_input(7, capture, cam); break;
-                            case SDLK_9:        handle_pose_input(8, capture, cam); break;
-                            case SDLK_0:        handle_pose_input(9, capture, cam); break;
                             case SDLK_t:        sToneMapping_Automatic = !sToneMapping_Automatic; break;
                             case SDLK_F2:       sShowUI = !sShowUI; break;
+                            case SDLK_F3:       sLockInteraction = !sLockInteraction; break;
                             case SDLK_F11:      sScreenshotRequest = true; break;
                         }
+
                     }
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (event.button.button == SDL_BUTTON_LEFT && !hover) {
+                if (event.button.button == SDL_BUTTON_LEFT && !hover && !sLockInteraction) {
                     SDL_SetRelativeMouseMode(SDL_TRUE);
                     camera_on = true;
                 }
@@ -211,7 +218,7 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
                 camera_on = false;
                 break;
             case SDL_MOUSEMOTION:
-                if (camera_on && !hover) {
+                if (camera_on && !hover && !sLockInteraction) {
                     cam.rotate(event.motion.xrel * rspeed, event.motion.yrel * rspeed);
                     iter = 0;
                 }
@@ -238,28 +245,30 @@ static bool handle_events(uint32_t& iter, Camera& cam) {
     io.MouseDown[0] = buttons & SDL_BUTTON(SDL_BUTTON_LEFT);
     io.MouseDown[1] = buttons & SDL_BUTTON(SDL_BUTTON_RIGHT);
 
-    for(bool b : arrows) {
-        if(b) {
-            iter = 0;
-            break;
+    if(!sLockInteraction) {
+        for(bool b : arrows) {
+            if(b) {
+                iter = 0;
+                break;
+            }
         }
-    }
 
-    const float drspeed = 10*rspeed;
-    if (arrows[0]) cam.move(0, 0,  tspeed);
-    if (arrows[1]) cam.move(0, 0, -tspeed);
-    if (arrows[2]) cam.move(-tspeed, 0, 0);
-    if (arrows[3]) cam.move( tspeed, 0, 0);
-    if (arrows[4]) cam.roll(drspeed);
-    if (arrows[5]) cam.roll(-drspeed);
-    if (arrows[6]) cam.move(0, tspeed, 0);
-    if (arrows[7]) cam.move(0, -tspeed, 0);
-    if (arrows[8]) cam.rotate(0, drspeed);
-    if (arrows[9]) cam.rotate(0, -drspeed);
-    if (arrows[10]) cam.rotate(-drspeed, 0);
-    if (arrows[11]) cam.rotate(drspeed, 0);
-    if (speed[0]) tspeed *= 1.1f;
-    if (speed[1]) tspeed *= 0.9f;
+        const float drspeed = 10*rspeed;
+        if (arrows[0]) cam.move(0, 0,  tspeed);
+        if (arrows[1]) cam.move(0, 0, -tspeed);
+        if (arrows[2]) cam.move(-tspeed, 0, 0);
+        if (arrows[3]) cam.move( tspeed, 0, 0);
+        if (arrows[4]) cam.roll(drspeed);
+        if (arrows[5]) cam.roll(-drspeed);
+        if (arrows[6]) cam.move(0, tspeed, 0);
+        if (arrows[7]) cam.move(0, -tspeed, 0);
+        if (arrows[8]) cam.rotate(0, drspeed);
+        if (arrows[9]) cam.rotate(0, -drspeed);
+        if (arrows[10]) cam.rotate(-drspeed, 0);
+        if (arrows[11]) cam.rotate(drspeed, 0);
+        if (speed[0]) tspeed *= 1.1f;
+        if (speed[1]) tspeed *= 0.9f;
+    }
 
     if(sPoseRequest >= 0) {
         cam.eye = sCameraPoses[sPoseRequest].Eye;
@@ -512,7 +521,12 @@ void rodent_ui_close() {
 }
 
 void rodent_ui_settitle(const char* str) {
-    SDL_SetWindowTitle(sWindow, str);
+    if(sLockInteraction) {
+        std::stringstream sstream;
+        sstream << str << " [Locked]";
+        SDL_SetWindowTitle(sWindow, sstream.str().c_str());
+    } else
+        SDL_SetWindowTitle(sWindow, str);
 }
 
 bool rodent_ui_handleinput(uint32_t& iter, Camera& cam) {

@@ -67,7 +67,7 @@ public:
     {
     }
 
-    void build(const obj::TriMesh &tri_mesh, const std::vector<::Tri> &tris)
+    void build(const mesh::TriMesh &tri_mesh, const std::vector<::Tri> &tris)
     {
         builder_.build(tris, NodeWriter(*this), LeafWriter(*this, tris, tri_mesh.indices), M / 2);
     }
@@ -229,7 +229,7 @@ public:
     {
     }
 
-    void build(const obj::TriMesh &tri_mesh, const std::vector<::Tri> &tris)
+    void build(const mesh::TriMesh &tri_mesh, const std::vector<::Tri> &tris)
     {
         builder_.build(tris, NodeWriter(*this), LeafWriter(*this, tris, tri_mesh.indices), 2);
     }
@@ -358,7 +358,7 @@ inline std::vector<uint8_t> pad_buffer(const std::vector<T> &elems, bool enable,
     return new_elems;
 }
 
-inline void write_tri_mesh(const obj::TriMesh &tri_mesh, bool enable_padding)
+inline void write_tri_mesh(const mesh::TriMesh &tri_mesh, bool enable_padding)
 {
     write_buffer("data/vertices.bin", pad_buffer(tri_mesh.vertices, enable_padding, sizeof(float) * 4));
     write_buffer("data/normals.bin", pad_buffer(tri_mesh.normals, enable_padding, sizeof(float) * 4));
@@ -369,7 +369,7 @@ inline void write_tri_mesh(const obj::TriMesh &tri_mesh, bool enable_padding)
 }
 
 template <size_t N, size_t M>
-inline void build_bvh(const obj::TriMesh &tri_mesh,
+inline void build_bvh(const mesh::TriMesh &tri_mesh,
                       std::vector<typename BvhNTriM<N, M>::Node> &nodes,
                       std::vector<typename BvhNTriM<N, M>::Tri> &tris)
 {

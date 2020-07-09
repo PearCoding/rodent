@@ -105,7 +105,7 @@ private:
     std::vector<Tri1>& tris_;
 };
 
-size_t build_bvh2(std::ofstream& out, const obj::TriMesh& tri_mesh) {
+size_t build_bvh2(std::ofstream& out, const mesh::TriMesh& tri_mesh) {
     std::vector<Tri> tris;
     for (size_t i = 0; i < tri_mesh.indices.size(); i += 4) {
         auto& v0 = tri_mesh.vertices[tri_mesh.indices[i + 0]];

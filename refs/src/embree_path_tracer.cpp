@@ -155,7 +155,7 @@ static bool load_scene(scene_s& ispc_scene,
                        std::vector<material_s>& materials,
                        std::vector<light_s>& lights,
                        const FilePath& path,
-                       obj::TriMesh& tri_mesh,
+                       mesh::TriMesh& tri_mesh,
                        obj::File& obj_file,
                        obj::MaterialLib& mtl_lib) {
     auto device = rtcNewDevice(nullptr);

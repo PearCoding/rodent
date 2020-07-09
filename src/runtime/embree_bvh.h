@@ -60,7 +60,7 @@ static void error_handler(void*, const RTCError code, const char* str) {
 }
 
 template <size_t M, typename NodeRef, typename BvhTri>
-void extract_bvh_leaf(const obj::TriMesh& tri_mesh, NodeRef leaf, std::vector<BvhTri>& new_tris) {
+void extract_bvh_leaf(const mesh::TriMesh& tri_mesh, NodeRef leaf, std::vector<BvhTri>& new_tris) {
     using namespace embree;
 
     size_t num;
@@ -115,7 +115,7 @@ void extract_bvh_leaf(const obj::TriMesh& tri_mesh, NodeRef leaf, std::vector<Bv
 }
 
 template <size_t N, size_t M, typename Bvh, typename NodeRef, typename BvhNode, typename BvhTri>
-void extract_bvh_node(const obj::TriMesh& tri_mesh,
+void extract_bvh_node(const mesh::TriMesh& tri_mesh,
                       NodeRef node, int index,
                       std::vector<BvhNode>& new_nodes,
                       std::vector<BvhTri>&  new_tris) {
@@ -166,7 +166,7 @@ void extract_bvh_node(const obj::TriMesh& tri_mesh,
 }
 
 template <size_t N, typename BvhNode, typename BvhTri>
-bool build_embree_bvh(const obj::TriMesh& tri_mesh, std::vector<BvhNode>& new_nodes, std::vector<BvhTri>& new_tris) {
+bool build_embree_bvh(const mesh::TriMesh& tri_mesh, std::vector<BvhNode>& new_nodes, std::vector<BvhTri>& new_tris) {
     using namespace embree;
     typedef typename BvhFromArity<N>::Type Bvh;
     static_assert(N == 4 || N == 8, "N must be 4 or 8");

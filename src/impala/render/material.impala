@@ -34,7 +34,31 @@ fn @make_bk7_refractive_index(math: Intrinsics) -> RefractiveIndex {
         let um = wvl / 1000.0f;// To micro meters
         let um2 = um*um;
         let n2 = 2.27110883f - 0.00938988354f*um2 - 0.000100277081f*um2*um2 + 0.0109572221f/um2 + 0.000120210067f/(um2 * um2);
-        max_2_f32(math.sqrtf(n2), 1.0f)
+        math.sqrtf(n2)
+    })
+}
+
+// https://refractiveindex.info/?shelf=main&book=C&page=Peter
+fn @make_diamond_refractive_index(math: Intrinsics) -> RefractiveIndex {
+    make_varying_refractive_index(@|wvl| {
+        let um = wvl / 1000.0f;// To micro meters
+        let um2 = um*um;
+        let n2 = 1.0f + 0.3306f * um2/(um2 - 0.030625f) + 4.3356f * um2 / (um2 - 0.011236f);
+        math.sqrtf(n2)
+    })
+}
+
+// https://refractiveindex.info/?shelf=main&book=H2O&page=Daimon-20.0C
+fn @make_water_refractive_index(math: Intrinsics) -> RefractiveIndex {
+    make_varying_refractive_index(@|wvl| {
+        let um = wvl / 1000.0f;// To micro meters
+        let um2 = um*um;
+        let n2 = 1.0f 
+                + 5.684027565E-1f / (1.0f - 5.101829712E-3f / um2) 
+                + 1.726177391E-1f / (1.0f - 1.821153936E-2f / um2) 
+                + 2.086189578E-2f / (1.0f - 2.620722293E-2f / um2) 
+                + 1.130748688E-1f / (1.0f - 1.069792721E1f / um2);
+        math.sqrtf(n2)
     })
 }
 

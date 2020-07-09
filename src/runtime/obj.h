@@ -5,9 +5,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "float3.h"
-#include "color.h"
-#include "file_path.h"
+#include "mesh.h"
 
 namespace obj {
 
@@ -58,20 +56,9 @@ struct File {
 
 typedef std::unordered_map<std::string, Material> MaterialLib;
 
-struct TriMesh {
-    std::vector<float3>   vertices;
-    std::vector<uint32_t> indices;
-    std::vector<float3>   normals;
-    std::vector<float3>   face_normals;
-    std::vector<float>    face_area;
-    std::vector<float2>   texcoords;
-};
-
 bool load_obj(const FilePath&, File&);
 bool load_mtl(const FilePath&, MaterialLib&);
-TriMesh compute_tri_mesh(const File&, size_t);
-void combine_into_tri_mesh(TriMesh& dst, const TriMesh& src);
-void replace_material_tri_mesh(TriMesh& tri_mesh, uint32_t m_idx);
+mesh::TriMesh compute_tri_mesh(const File&, size_t);
 
 } // namespace obj
 
