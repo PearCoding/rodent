@@ -77,6 +77,8 @@ set(RUNTIME_SRCS
     runtime/obj.h
     runtime/mesh.cpp
     runtime/mesh.h
+    runtime/mts_serialized.cpp
+    runtime/mts_serialized.h
     runtime/ply.cpp
     runtime/ply.h
     runtime/file_path.h

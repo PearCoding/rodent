@@ -156,6 +156,7 @@ fn @make_environment_light(math: Intrinsics, max_radius: f32, color: Spectrum) -
     }
 }
 
+/* TODO: This should contain a distribution map for efficient sampling */
 fn @make_environment_light_textured(math: Intrinsics, max_radius: f32, tex: Texture) -> Light {
     Light {
         sample_direct: @ |rnd, from| {

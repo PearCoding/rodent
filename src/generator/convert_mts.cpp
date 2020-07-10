@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "bvh.h"
+#include "runtime/mts_serialized.h"
 #include "runtime/ply.h"
 #include "impala.h"
 #include "export_image.h"
@@ -221,6 +222,17 @@ inline mesh::TriMesh setup_mesh_ply(const Object& elem, const LoadInfo& info) {
     return trimesh;
 }
 
+inline mesh::TriMesh setup_mesh_serialized(const Object& elem, const LoadInfo& info) {
+    size_t shape_index = elem.property("shape_index").getInteger(0);
+    std::string filename = info.Dir + "/" + elem.property("filename").getString();
+    auto trimesh = mts::load_mesh(filename, shape_index);           
+    if(trimesh.vertices.empty()){
+        warn("Can not load shape given by file '", filename, "'");
+        return mesh::TriMesh();
+    }
+    return trimesh;
+}
+
 static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& ctx, std::ostream &os) {
     std::unordered_map<Material, uint32_t, MaterialHash> unique_mats;
 
@@ -237,6 +249,8 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
             child_mesh = setup_mesh_obj(*child, info);
         } else if(child->pluginType() == "ply") {
             child_mesh = setup_mesh_ply(*child, info);
+        } else if(child->pluginType() == "serialized") {
+            child_mesh = setup_mesh_serialized(*child, info);
         } else {
             warn("Can not load shape type '", child->pluginType(), "'");
             continue;
@@ -303,8 +317,8 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
        << "    let normals      = device.load_buffer(\"data/normals.bin\");\n"
        << "    let face_normals = device.load_buffer(\"data/face_normals.bin\");\n"
        << "    let face_area    = device.load_buffer(\"data/face_area.bin\");\n"
-       << "    let indices      = device.load_buffer(\"data/indices.bin\");\n"
        << "    let texcoords    = device.load_buffer(\"data/texcoords.bin\");\n"
+       << "    let indices      = device.load_buffer(\"data/indices.bin\");\n"
        << "    let tri_mesh     = TriMesh {\n"
        << "        vertices:     @ |i| vertices.load_vec3(i),\n"
        << "        normals:      @ |i| normals.load_vec3(i),\n"
@@ -317,6 +331,8 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
        << "    };\n"
        << "    let bvh = device.load_bvh(\"data/bvh.bin\");\n";
 
+    if(ctx.Mesh.face_area.size() < 4) // Make sure it is not too small
+        ctx.Mesh.face_area.resize(16);
     write_tri_mesh(ctx.Mesh, info.EnablePadding);
 
     // Generate BVHs
@@ -371,6 +387,13 @@ static void setup_shapes(const Object& elem, const LoadInfo& info, GenContext& c
     ctx.SceneDiameter = length(ctx.SceneBBox.max - ctx.SceneBBox.min);
 }
 
+static void load_texture(const std::string& filename, const LoadInfo& info, const GenContext& ctx, std::ostream &os) { 
+    auto name = fix_file(filename);
+    auto c_name = export_image(info.Upsampler, info.Dir + "/" + name);
+    os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
+    os << "    let tex_" << make_id(name) << " = make_texture(math, make_repeat_border(), make_bilinear_filter(), image_" << make_id(name) << ");\n";
+}
+
 static void setup_textures(const Object& elem, const LoadInfo& info, const GenContext& ctx, std::ostream &os) {
     if(ctx.Textures.empty())
         return;
@@ -393,11 +416,7 @@ static void setup_textures(const Object& elem, const LoadInfo& info, const GenCo
             continue;
         
         mapped.insert(filename);
-    
-        auto name = fix_file(filename);
-        auto c_name = export_image(info.Upsampler, info.Dir + "/" + name);
-        os << "    let image_" << make_id(name) << " = device.load_img(\"" << c_name.path() << "\");\n";
-        os << "    let tex_" << make_id(name) << " = make_texture(math, make_repeat_border(), make_bilinear_filter(), image_" << make_id(name) << ");\n";
+        load_texture(filename, info, ctx, os);
     }
 }
 
@@ -660,7 +679,8 @@ static size_t setup_lights(const Object& elem, const LoadInfo& info, const GenCo
                     << escape_f32(dir.x) << ", " << escape_f32(dir.y) << ", " << escape_f32(dir.z) << "), " 
                     << escape_f32(ctx.SceneDiameter) << ", "
                     << extractMaterialPropertyIllum(child, "irradiance", info, ctx, 1.0f) << ");\n";
-        } else if(child->pluginType() == "sun") {// TODO
+        } else if(child->pluginType() == "sun" ||
+            child->pluginType() == "sunsky") {// TODO
             warn("Sun emitter is approximated by directional light");
             auto dir = child->property("sun_direction").getVector();
             auto power = child->property("scale").getNumber(1.0f);
@@ -672,6 +692,12 @@ static size_t setup_lights(const Object& elem, const LoadInfo& info, const GenCo
             os << "    let light_" << light_count << " = make_environment_light(math, "
                     << escape_f32(ctx.SceneDiameter) << ", "
                     << extractMaterialPropertyIllum(child, "radiance", info, ctx, 1.0f) << ");\n";
+        } else if(child->pluginType() == "envmap") { 
+            auto filename = child->property("filename").getString();
+            load_texture(filename, info, ctx, os);// TODO: What if filename is used already in the previous material stages
+            os << "    let light_" << light_count << " = make_environment_light_textured(math, "
+                    << escape_f32(ctx.SceneDiameter) << ", "
+                    << "tex_" << make_id(fix_file(filename)) << ");\n";
         } else {
             warn("Unknown emitter type '", child->pluginType(), "'");
             continue;
