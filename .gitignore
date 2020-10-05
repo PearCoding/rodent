@@ -3,6 +3,8 @@ tools/common/traversal.h
 tools/common/shading.h
 src/driver/interface.h
 
+build/
+
 # Compiled Object files
 *.slo
 *.lo
